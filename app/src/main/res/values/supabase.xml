@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      URL del proyecto y publishable/anon key de Supabase. La publishable key
+      (sb_publishable_*) es segura para vivir en el cliente — el acceso real
+      a los datos lo controlan las políticas de Row Level Security definidas
+      en supabase/migrations/0001_init_schema.sql, no el secreto de esta key.
+      Nunca poner acá la service_role key: esa sí es secreta (se salta RLS).
+    -->
+    <string name="supabase_url" translatable="false">https://klmtzimhkfllpftzbeci.supabase.co</string>
+    <string name="supabase_publishable_key" translatable="false">sb_publishable_87UnZyzOs_06soKtObFTow_HmrcMM_H</string>
+</resources>

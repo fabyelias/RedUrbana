@@ -1,0 +1,160 @@
+package com.redurbana.feature.map
+
+import android.graphics.Paint
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.input.pointer.pointerInput
+import com.mapbox.geojson.Point
+import com.mapbox.maps.MapboxMap
+import com.redurbana.core.ui.theme.LineColorProvider
+import com.redurbana.core.ui.theme.RedUrbanaColors
+import com.redurbana.core.ui.theme.VehicleConfidenceStyle
+import com.redurbana.feature.map.cluster.MapRenderItem
+import kotlin.math.hypot
+
+/**
+ * Dibuja TODOS los vehículos visibles (salvo el seleccionado/seguido, que
+ * usa VehicleMapMarker3D) en un único Canvas, con un solo paso de dibujo
+ * por frame.
+ *
+ * La proyección (GeoPoint → coordenadas de pantalla) ahora usa
+ * `MapboxMap.pixelForCoordinate(Point)`, el equivalente Mapbox a
+ * `Projection.toScreenLocation()` de Google Maps — el resto de la lógica
+ * (por qué un Canvas y no un objeto por vehículo) no cambió con la
+ * migración de SDK.
+ */
+@Composable
+fun VehicleCanvasOverlay(
+    items: List<MapRenderItem>,
+    mapboxMap: MapboxMap?,
+    selectedVehicleId: String?,
+    onVehicleTap: (vehicleId: String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val textPaint = remember {
+        Paint().apply {
+            textAlign = Paint.Align.CENTER
+            isAntiAlias = true
+            isFakeBoldText = true
+        }
+    }
+
+    Canvas(
+        modifier = modifier.pointerInput(items, mapboxMap) {
+            detectTapGestures { tapOffset ->
+                val map = mapboxMap ?: return@detectTapGestures
+                val hit = findNearestSingleWithinRadius(items, map, tapOffset, radiusPx = 40f)
+                hit?.let { onVehicleTap(it) }
+            }
+        },
+    ) {
+        val map = mapboxMap ?: return@Canvas
+
+        for (item in items) {
+            when (item) {
+                is MapRenderItem.Single -> {
+                    if (item.vehicle.vehicleId.value == selectedVehicleId) continue // ese lo dibuja VehicleMapMarker3D
+                    drawVehicleDot(map, item, textPaint)
+                }
+                is MapRenderItem.Cluster -> drawClusterBadge(map, item, textPaint)
+            }
+        }
+    }
+}
+
+private fun DrawScope.drawVehicleDot(
+    map: MapboxMap,
+    item: MapRenderItem.Single,
+    textPaint: Paint,
+) {
+    val screenPoint = map.pixelForCoordinate(
+        Point.fromLngLat(item.vehicle.position.longitude, item.vehicle.position.latitude),
+    )
+    val color = LineColorProvider.colorFor(colorSeed = item.vehicle.routeId.value)
+    val center = Offset(screenPoint.x.toFloat(), screenPoint.y.toFloat())
+    val confidenceStyle = VehicleConfidenceStyle.from(item.vehicle.positionConfidence?.percent)
+
+    drawCircle(color = color.copy(alpha = confidenceStyle.alpha), radius = 14f, center = center)
+    if (confidenceStyle.showsDashedRing) {
+        drawCircle(
+            color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.7f),
+            radius = 14f,
+            center = center,
+            style = Stroke(
+                width = 2f,
+                pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(4f, 4f)),
+            ),
+        )
+    } else {
+        drawCircle(color = androidx.compose.ui.graphics.Color.White.copy(alpha = confidenceStyle.alpha), radius = 14f, center = center, style = Stroke(width = 2f))
+    }
+
+    val luminance = 0.299f * color.red + 0.587f * color.green + 0.114f * color.blue
+    textPaint.textSize = 18f
+    textPaint.alpha = (confidenceStyle.alpha * 255).toInt()
+    textPaint.color = if (luminance > 0.5f) android.graphics.Color.BLACK else android.graphics.Color.WHITE
+    drawContext.canvas.nativeCanvas.drawText(
+        item.vehicle.routeId.value.take(3),
+        center.x,
+        center.y + 6f,
+        textPaint,
+    )
+}
+
+private fun DrawScope.drawClusterBadge(
+    map: MapboxMap,
+    cluster: MapRenderItem.Cluster,
+    textPaint: Paint,
+) {
+    val screenPoint = map.pixelForCoordinate(Point.fromLngLat(cluster.center.longitude, cluster.center.latitude))
+    val center = Offset(screenPoint.x.toFloat(), screenPoint.y.toFloat())
+    val radius = (18 + (cluster.count.coerceAtMost(50) / 2)).toFloat()
+
+    drawCircle(color = RedUrbanaColors.AccentGreenSoft, radius = radius, center = center)
+    drawCircle(
+        color = RedUrbanaColors.AccentGreenPrimary,
+        radius = radius,
+        center = center,
+        style = Stroke(width = 3f),
+    )
+    textPaint.textSize = 26f
+    textPaint.color = android.graphics.Color.WHITE
+    drawContext.canvas.nativeCanvas.drawText(
+        cluster.count.toString(),
+        center.x,
+        center.y + 9f,
+        textPaint,
+    )
+}
+
+private fun findNearestSingleWithinRadius(
+    items: List<MapRenderItem>,
+    map: MapboxMap,
+    tapOffset: Offset,
+    radiusPx: Float,
+): String? {
+    var closestId: String? = null
+    var closestDistance = radiusPx
+    for (item in items) {
+        if (item !is MapRenderItem.Single) continue
+        val screenPoint = map.pixelForCoordinate(
+            Point.fromLngLat(item.vehicle.position.longitude, item.vehicle.position.latitude),
+        )
+        val distance = hypot(
+            (screenPoint.x - tapOffset.x),
+            (screenPoint.y - tapOffset.y),
+        ).toFloat()
+        if (distance < closestDistance) {
+            closestDistance = distance
+            closestId = item.vehicle.vehicleId.value
+        }
+    }
+    return closestId
+}

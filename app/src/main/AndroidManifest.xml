@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- TODO: agregar cuando se implemente el Foreground Service de LocationReporter
+         (data-crowdsourcing) — ver comentario en RedUrbanaApplication.kt:
+         <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+         <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+         <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    -->
+
+    <application
+        android:name=".RedUrbanaApplication"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.RedUrbana"
+        android:supportsRtl="true">
+
+        <!-- El Mapbox Maps SDK detecta automáticamente @string/mapbox_access_token
+             (ver app/src/main/res/values/mapbox.xml) — no requiere meta-data acá. -->
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.RedUrbana">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

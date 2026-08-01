@@ -1,0 +1,21 @@
+# Android / Gradle
+*.iml
+.gradle/
+/local.properties
+/.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+*.keystore
+*.jks
+
+# Nunca debe subirse ningún token secreto al repo — el MAPBOX_DOWNLOADS_TOKEN
+# vive en ~/.gradle/gradle.properties (fuera de este repositorio), nunca acá.
+gradle.properties.local
+
+# GitHub push protection lo detecta como secreto aunque sea el token pk.*
+# público. Cada dev lo completa a mano a partir de mapbox.xml.example
+# (ver docs/CREDENTIALS_SETUP.md sección 2).
+/app/src/main/res/values/mapbox.xml

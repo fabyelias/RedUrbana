@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Copiar este archivo a mapbox.xml (mismo directorio) y completar con el
+      token PÚBLICO de Mapbox (pk.*) — ver docs/CREDENTIALS_SETUP.md sección 2.
+      mapbox.xml está en .gitignore: GitHub push protection lo bloquea como
+      secreto aunque el token sea público, así que no se commitea.
+    -->
+    <string name="mapbox_access_token" translatable="false">pk.TU_TOKEN_PUBLICO_ACA</string>
+</resources>
