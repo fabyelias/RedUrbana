@@ -1,0 +1,22 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Silueta de colectivo. Contenido dentro de la safe zone (centro 66x66dp)
+         para que no se recorte con ninguna máscara de ícono adaptativo. -->
+    <!-- RedUrbanaColors.AccentGreenPrimary -->
+    <path
+        android:fillColor="#22C55E"
+        android:pathData="M26,68L26,48A8,8 0 0,1 34,40L74,40A8,8 0 0,1 82,48L82,68Z" />
+    <!-- Ventanas y ruedas "recortadas" en el color de fondo -->
+    <path
+        android:fillColor="#0A0E12"
+        android:pathData="M32,46H76V56H32Z" />
+    <path
+        android:fillColor="#0A0E12"
+        android:pathData="M34,70a6,6 0 1,0 12,0a6,6 0 1,0 -12,0Z" />
+    <path
+        android:fillColor="#0A0E12"
+        android:pathData="M62,70a6,6 0 1,0 12,0a6,6 0 1,0 -12,0Z" />
+</vector>

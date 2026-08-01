@@ -53,3 +53,37 @@ key.
 La **service_role key** (si algún día hace falta, ej. para un backend de
 agregación) es distinta y NUNCA va al repo — esa sí se salta RLS por
 completo.
+
+## 5. Keystore de firma (release / Play Store)
+
+Play Store exige un AAB firmado con una key de release (no la de debug).
+`app/build.gradle.kts` ya lee un `app/keystore.properties` (gitignored) si
+existe — si no existe, el build de `release` simplemente no queda firmado.
+
+**Generar el keystore (una sola vez, en Android Studio):**
+
+1. `Build` → `Generate Signed Bundle / APK...` → `Android App Bundle`.
+2. `Create new...` → completar el formulario (organización, nombre, validez
+   ≥25 años) y guardar el `.jks` como `app/redurbana-release.jks` (ese
+   nombre y esa carpeta ya están cubiertos por `.gitignore` vía `*.jks`).
+3. **Guardar las contraseñas en un gestor de contraseñas** — si se pierden,
+   Google permite resetear la "upload key" (ver más abajo) pero es un
+   trámite de soporte, no algo inmediato.
+
+**Crear `app/keystore.properties`** (gitignored, no lo pidas por chat — completalo vos a mano):
+
+```properties
+storeFile=redurbana-release.jks
+storePassword=TU_STORE_PASSWORD
+keyAlias=redurbana
+keyPassword=TU_KEY_PASSWORD
+```
+
+Con eso, `Build` → `Generate Signed Bundle / APK...` (o el build de
+`release` normal) ya firma automáticamente.
+
+**Nota sobre Play App Signing:** al subir el primer AAB a Play Console,
+Google va a ofrecer gestionar la key de firma final que llega a los
+usuarios (Play App Signing) — la key local de acá pasa a ser la "upload
+key", que sigue haciendo falta para firmar cada subida, pero perderla ya
+no significa perder la app.
