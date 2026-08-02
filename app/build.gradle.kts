@@ -82,6 +82,9 @@ dependencies {
     implementation(libs.compose.ui)
     implementation(libs.compose.material3)
     implementation(libs.navigation.compose)
+    // Solo para el tema base de la Activity en themes.xml (Theme.Material3.*
+    // XML) — la UI en sí es 100% Compose, no usa vistas de Material Components.
+    implementation(libs.material)
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
