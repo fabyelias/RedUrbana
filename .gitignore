@@ -11,6 +11,9 @@
 .cxx
 *.keystore
 *.jks
+.kotlin/
+hs_err_pid*.log
+*.hprof
 
 # AAB/APK generados (ej. "Generate Signed App Bundle" con destino app/): no
 # son código fuente, no van al repo.

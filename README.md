@@ -33,8 +33,8 @@ Kotlin + Jetpack Compose, Clean Architecture multi-módulo.
 
 **Leer `docs/CREDENTIALS_SETUP.md` primero.** Resumen:
 - El token público de Mapbox (`pk...`) NO está en el repo (GitHub push
-  protection lo bloquea igual que uno secreto) — copiar
-  `app/src/main/res/values/mapbox.xml.example` a `mapbox.xml` y completarlo.
+  protection lo bloquea igual que uno secreto) — copiar `app/mapbox.xml.example`
+  a `app/src/main/res/values/mapbox.xml` y completarlo.
 - Falta que vos agregues tu token secreto de Mapbox (`sk...`, para que Gradle
   pueda descargar el SDK) en `~/.gradle/gradle.properties` de tu máquina —
   **nunca en este repositorio**.

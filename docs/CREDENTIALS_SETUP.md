@@ -26,7 +26,7 @@ no vive en el repo.
 Setup en cada máquina:
 
 ```bash
-cp app/src/main/res/values/mapbox.xml.example app/src/main/res/values/mapbox.xml
+cp app/mapbox.xml.example app/src/main/res/values/mapbox.xml
 ```
 
 Y completar `mapbox_access_token` con el valor real desde
