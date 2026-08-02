@@ -5,11 +5,17 @@
 /.idea/
 .DS_Store
 /build
+**/build/
 /captures
 .externalNativeBuild
 .cxx
 *.keystore
 *.jks
+
+# AAB/APK generados (ej. "Generate Signed App Bundle" con destino app/): no
+# son código fuente, no van al repo.
+*.aab
+*.apk
 
 # Nunca debe subirse ningún token secreto al repo — el MAPBOX_DOWNLOADS_TOKEN
 # vive en ~/.gradle/gradle.properties (fuera de este repositorio), nunca acá.
