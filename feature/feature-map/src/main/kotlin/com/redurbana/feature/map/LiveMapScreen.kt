@@ -20,8 +20,9 @@ import com.mapbox.maps.MapboxMap
 import com.mapbox.maps.extension.compose.MapEffect
 import com.mapbox.maps.extension.compose.MapboxMap as MapboxMapComposable
 import com.mapbox.maps.extension.compose.animation.viewport.rememberMapViewportState
-import com.mapbox.maps.extension.compose.style.MapboxStandardStyle
-import com.mapbox.maps.extension.compose.style.standard.StandardLightPreset
+import com.mapbox.maps.extension.compose.style.BooleanValue
+import com.mapbox.maps.extension.compose.style.standard.LightPresetValue
+import com.mapbox.maps.extension.compose.style.standard.MapboxStandardStyle
 import com.mapbox.maps.extension.compose.style.standard.rememberStandardStyleState
 import com.mapbox.maps.plugin.animation.MapAnimationOptions
 import com.redurbana.core.ui.components.LiveBadge
@@ -48,9 +49,11 @@ import com.redurbana.feature.map.cluster.VehicleClusterer
  *    Google, pero el principio (una sola superficie de dibujo) es el mismo.
  *
  * NOTA: la API de Compose de Mapbox evoluciona rápido entre versiones
- * menores — validar los nombres exactos (StandardLightPreset,
- * rememberStandardStyleState, etc.) contra la doc vigente de Mapbox al
- * compilar esto por primera vez.
+ * menores. Validado contra Maps SDK 11.26.0: el estilo Standard se
+ * configura vía `standardStyleState.configurationsState` (no
+ * `styleImportConfig`), con `LightPresetValue` (no `StandardLightPreset`)
+ * y `BooleanValue` para flags como `show3dObjects`. Si se sube de versión
+ * mayor, re-chequear contra la doc vigente de Mapbox.
  */
 @Composable
 fun LiveMapScreen(
@@ -72,10 +75,10 @@ fun LiveMapScreen(
     }
 
     // Estilo oscuro nativo con edificios 3D — sin JSON de estilo custom.
-    val standardStyleState = rememberStandardStyleState().apply {
-        styleImportConfig.apply {
-            lightPreset = StandardLightPreset.NIGHT
-            show3dObjects = true
+    val standardStyleState = rememberStandardStyleState {
+        configurationsState.apply {
+            lightPreset = LightPresetValue.NIGHT
+            show3dObjects = BooleanValue(true)
         }
     }
 
@@ -107,7 +110,7 @@ fun LiveMapScreen(
         MapboxMapComposable(
             modifier = Modifier.fillMaxSize(),
             mapViewportState = mapViewportState,
-            style = { MapboxStandardStyle(styleState = standardStyleState) },
+            style = { MapboxStandardStyle(standardStyleState = standardStyleState) },
         ) {
             MapEffect(Unit) { mapView ->
                 nativeMap = mapView.mapboxMap
