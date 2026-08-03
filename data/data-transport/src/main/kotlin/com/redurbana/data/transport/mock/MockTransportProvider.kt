@@ -55,9 +55,15 @@ import kotlin.random.Random
 class MockTransportProvider @Inject constructor() : TransportDataProvider {
 
     companion object {
-        /** Subir estas dos constantes es la forma de stress-testear con miles de vehículos. */
-        private const val SYNTHETIC_ROUTE_COUNT = 40
-        private const val VEHICLES_PER_ROUTE = 10 // 40 * 10 = 400 vehículos sintéticos + 4 de demo
+        /**
+         * Subir estas dos constantes es la forma de stress-testear con miles de
+         * vehículos. Bajado temporalmente de 40*10=400 a 8*4=32 — el dev actual
+         * corre en un emulador sobre una máquina de 3 GB de RAM, y 400
+         * vehículos recalculándose cada 2s la satura. Subir de nuevo antes de
+         * validar la escalabilidad real (hardware capaz o dispositivo físico).
+         */
+        private const val SYNTHETIC_ROUTE_COUNT = 8
+        private const val VEHICLES_PER_ROUTE = 4 // 8 * 4 = 32 vehículos sintéticos + 4 de demo
 
         private const val TICK_INTERVAL_MS = 2_000L // GTFS-RT real suele actualizar cada 10-30s; acá va más rápido a propósito, para poder ver el movimiento en la demo
         private const val GRID_CELL_SIZE_DEGREES = 0.01 // ~1.1km — suficiente para viewports típicos de un celular
