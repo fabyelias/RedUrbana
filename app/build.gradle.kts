@@ -74,6 +74,7 @@ dependencies {
     implementation(project(":feature:feature-alerts"))
     implementation(project(":feature:feature-stops"))
     implementation(project(":feature:feature-settings"))
+    implementation(project(":feature:feature-lines"))
 
     implementation(libs.core.ktx)
     implementation(libs.lifecycle.runtime.ktx)

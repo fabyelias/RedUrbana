@@ -6,6 +6,7 @@ import com.redurbana.domain.transport.model.ProviderCapabilities
 import com.redurbana.domain.transport.model.ReliabilityScore
 import com.redurbana.domain.transport.model.RouteDetails
 import com.redurbana.domain.transport.model.RouteId
+import com.redurbana.domain.transport.model.RouteRecommendation
 import com.redurbana.domain.transport.model.ServiceAlert
 import com.redurbana.domain.transport.model.Stop
 import com.redurbana.domain.transport.model.StopId
@@ -52,6 +53,13 @@ interface TransportDataProvider {
     suspend fun getRouteDetails(routeId: RouteId): Result<RouteDetails>
 
     suspend fun getStopsNearby(location: GeoPoint, radiusMeters: Int): Result<List<Stop>>
+
+    /**
+     * Líneas candidatas para ir de [origin] a [destination], ordenadas por
+     * cercanía a [origin]. Sobre datos sintéticos esto es una aproximación
+     * geométrica razonable, no un cálculo de recorrido real por calles.
+     */
+    suspend fun getRouteRecommendations(origin: GeoPoint, destination: GeoPoint): Result<List<RouteRecommendation>>
 
     suspend fun getArrivalEstimates(stopId: StopId): Result<List<ArrivalEstimate>>
 

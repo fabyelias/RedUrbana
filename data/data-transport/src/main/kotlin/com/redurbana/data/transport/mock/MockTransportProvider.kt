@@ -9,11 +9,13 @@ import com.redurbana.domain.transport.model.ProviderCapabilities
 import com.redurbana.domain.transport.model.ReliabilityScore
 import com.redurbana.domain.transport.model.RouteDetails
 import com.redurbana.domain.transport.model.RouteId
+import com.redurbana.domain.transport.model.RouteRecommendation
 import com.redurbana.domain.transport.model.ServiceAlert
 import com.redurbana.domain.transport.model.Stop
 import com.redurbana.domain.transport.model.StopId
 import com.redurbana.domain.transport.model.VehicleId
 import com.redurbana.domain.transport.model.VehiclePosition
+import com.redurbana.domain.transport.model.distanceMeters
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -67,6 +69,7 @@ class MockTransportProvider @Inject constructor() : TransportDataProvider {
 
         private const val TICK_INTERVAL_MS = 2_000L // GTFS-RT real suele actualizar cada 10-30s; acá va más rápido a propósito, para poder ver el movimiento en la demo
         private const val GRID_CELL_SIZE_DEGREES = 0.01 // ~1.1km — suficiente para viewports típicos de un celular
+        private const val MAX_ORIGIN_DISTANCE_METERS = 2_000.0 // qué tan lejos del origen puede pasar una línea para seguir siendo "recomendable"
     }
 
     override val providerId: String = "mock-buenos-aires-v2-stress"
@@ -89,6 +92,8 @@ class MockTransportProvider @Inject constructor() : TransportDataProvider {
     )
 
     private val allRoutes: Map<RouteId, RouteDetails> = MockRouteData.routes + syntheticFleet.routes
+
+    private val allStops: List<Stop> = allRoutes.values.flatMap { route -> route.branches.flatMap { it.stops } }
 
     private val fleet: List<SimulatedVehicle> = buildList {
         // Las 4 líneas "de demo" con recorridos reales alrededor del Congreso,
@@ -147,13 +152,45 @@ class MockTransportProvider @Inject constructor() : TransportDataProvider {
     }
 
     override suspend fun getStopsNearby(location: GeoPoint, radiusMeters: Int): Result<List<Stop>> {
-        // Paradas fijas de ejemplo alrededor del Congreso, como en la referencia visual.
-        val stops = listOf(
-            Stop(StopId("congreso"), "Congreso", GeoPoint(-34.6095, -58.3924), listOf(RouteId("60"), RouteId("152"), RouteId("37"), RouteId("59"))),
-            Stop(StopId("plaza-congreso"), "Plaza del Congreso", GeoPoint(-34.6098, -58.3928), listOf(RouteId("70"), RouteId("100"), RouteId("146"))),
-            Stop(StopId("avmayo-9dejulio"), "Av. de Mayo y 9 de Julio", GeoPoint(-34.6083, -58.3811), listOf(RouteId("17"), RouteId("45"), RouteId("86"), RouteId("102"))),
-        )
-        return Result.success(stops)
+        val nearby = allStops
+            .map { stop -> stop to stop.location.distanceMeters(location) }
+            .filter { (_, distance) -> distance <= radiusMeters }
+            .sortedBy { (_, distance) -> distance }
+            .map { (stop, _) -> stop }
+        return Result.success(nearby)
+    }
+
+    override suspend fun getRouteRecommendations(origin: GeoPoint, destination: GeoPoint): Result<List<RouteRecommendation>> {
+        val recommendations = allRoutes.values.mapNotNull { route ->
+            // Sobre datos sintéticos esto es una aproximación geométrica (línea
+            // recta a la polilínea/paradas), no un cálculo de recorrido real.
+            val branchWithStops = route.branches.firstOrNull { it.stops.isNotEmpty() } ?: route.branches.firstOrNull()
+            val referencePoints = branchWithStops?.stops?.map { it.location }
+                ?.ifEmpty { branchWithStops.path }
+                ?: return@mapNotNull null
+            if (referencePoints.isEmpty()) return@mapNotNull null
+
+            val distanceToOrigin = referencePoints.minOf { it.distanceMeters(origin) }
+            if (distanceToOrigin > MAX_ORIGIN_DISTANCE_METERS) return@mapNotNull null
+            val distanceToDestination = referencePoints.minOf { it.distanceMeters(destination) }
+
+            val stopsToDestination = branchWithStops.stops.takeIf { it.isNotEmpty() }?.let { stops ->
+                val originIndex = stops.indices.minByOrNull { stops[it].location.distanceMeters(origin) }
+                val destinationIndex = stops.indices.minByOrNull { stops[it].location.distanceMeters(destination) }
+                if (originIndex != null && destinationIndex != null) kotlin.math.abs(destinationIndex - originIndex) else null
+            }
+
+            RouteRecommendation(
+                routeId = route.routeId,
+                shortName = route.shortName,
+                colorSeed = route.colorSeed,
+                reliability = route.reliability,
+                distanceToOriginMeters = distanceToOrigin,
+                distanceToDestinationMeters = distanceToDestination,
+                stopsToDestination = stopsToDestination,
+            )
+        }.sortedBy { it.distanceToOriginMeters }
+        return Result.success(recommendations)
     }
 
     override suspend fun getArrivalEstimates(stopId: StopId): Result<List<ArrivalEstimate>> {

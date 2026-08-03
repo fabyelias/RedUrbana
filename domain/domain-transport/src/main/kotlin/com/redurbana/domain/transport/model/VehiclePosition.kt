@@ -1,6 +1,10 @@
 package com.redurbana.domain.transport.model
 
 import kotlinx.datetime.Instant
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
  * Coordenada geográfica agnóstica del SDK de mapas usado.
@@ -11,6 +15,20 @@ data class GeoPoint(
     val latitude: Double,
     val longitude: Double,
 )
+
+private const val EARTH_RADIUS_METERS = 6_371_000.0
+
+/** Distancia en línea recta (haversine), no distancia de recorrido real. */
+fun GeoPoint.distanceMeters(other: GeoPoint): Double {
+    val lat1 = Math.toRadians(latitude)
+    val lat2 = Math.toRadians(other.latitude)
+    val deltaLat = Math.toRadians(other.latitude - latitude)
+    val deltaLon = Math.toRadians(other.longitude - longitude)
+    val a = sin(deltaLat / 2) * sin(deltaLat / 2) +
+        cos(lat1) * cos(lat2) * sin(deltaLon / 2) * sin(deltaLon / 2)
+    val c = 2 * atan2(sqrt(a), sqrt(1 - a))
+    return EARTH_RADIUS_METERS * c
+}
 
 enum class VehicleStatus {
     ON_TIME,

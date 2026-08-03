@@ -1,9 +1,13 @@
 package com.redurbana.feature.map
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -25,7 +29,9 @@ import com.mapbox.maps.extension.compose.style.standard.LightPresetValue
 import com.mapbox.maps.extension.compose.style.standard.MapboxStandardStyle
 import com.mapbox.maps.extension.compose.style.standard.rememberStandardStyleState
 import com.mapbox.maps.plugin.animation.MapAnimationOptions
+import com.redurbana.core.ui.components.GlassCard
 import com.redurbana.core.ui.components.LiveBadge
+import com.redurbana.core.ui.theme.RedUrbanaColors
 import com.redurbana.domain.transport.GeoBounds
 import com.redurbana.domain.transport.model.GeoPoint
 import com.redurbana.feature.map.cluster.VehicleClusterer
@@ -60,8 +66,18 @@ fun LiveMapScreen(
     modifier: Modifier = Modifier,
     viewModel: LiveMapViewModel = hiltViewModel(),
     onVehicleClick: (routeId: String, vehicleId: String) -> Unit = { _, _ -> },
+    onSearchDestinationClick: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val selectedRouteId = (uiState as? MapUiState.Success)?.selectedRouteId
+
+    if (uiState is MapUiState.Success && selectedRouteId == null) {
+        // Sin línea elegida: ni siquiera montamos el mapa de Mapbox (motor
+        // 3D + tiles), no solo el overlay de vehículos — es lo que resuelve
+        // el consumo de recursos al abrir la app.
+        NoDestinationSelectedContent(modifier = modifier, onSearchDestinationClick = onSearchDestinationClick)
+        return
+    }
 
     // Congreso, CABA — mismo punto de partida que la referencia visual.
     val congreso = Point.fromLngLat(-58.3924, -34.6095) // Mapbox: (lng, lat), OJO con el orden
@@ -151,9 +167,18 @@ fun LiveMapScreen(
 
         LiveBadge(
             modifier = Modifier
-                .align(Alignment.TopEnd)
+                .align(Alignment.TopStart)
                 .padding(16.dp),
         )
+
+        TextButton(
+            onClick = onSearchDestinationClick,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(16.dp),
+        ) {
+            Text("Cambiar destino")
+        }
 
         when {
             uiState is MapUiState.Loading -> {
@@ -166,6 +191,39 @@ fun LiveMapScreen(
             }
             uiState is MapUiState.Success && vehicles.isEmpty() -> {
                 ColdStartMessage(modifier = Modifier.align(Alignment.Center))
+            }
+        }
+    }
+}
+
+/**
+ * Estado inicial de la pantalla: todavía no se eligió destino/línea. A
+ * propósito no monta [MapboxMapComposable] — evita motor 3D + descarga de
+ * tiles + simulación de flota hasta que hace falta de verdad.
+ */
+@Composable
+private fun NoDestinationSelectedContent(modifier: Modifier = Modifier, onSearchDestinationClick: () -> Unit) {
+    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        GlassCard(
+            modifier = Modifier.padding(24.dp),
+            contentPadding = PaddingValues(20.dp),
+        ) {
+            Text(
+                text = "Elegí tu destino",
+                style = MaterialTheme.typography.titleMedium,
+                color = RedUrbanaColors.TextPrimary,
+            )
+            Text(
+                text = "Buscá a dónde vas y te mostramos solo la línea que te conviene, en vez de toda la flota de una.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = RedUrbanaColors.TextSecondary,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Button(
+                onClick = onSearchDestinationClick,
+                modifier = Modifier.padding(top = 12.dp),
+            ) {
+                Text("Buscar destino")
             }
         }
     }

@@ -21,11 +21,21 @@ android {
 dependencies {
     implementation(project(":core:core-ui"))
     implementation(project(":core:core-common"))
+    implementation(project(":domain:domain-transport"))
+
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.material3)
+    implementation(libs.lifecycle.viewmodel.compose)
     implementation(libs.hilt.navigation.compose)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
-    // TODO: pantalla lines (roadmap paso 3+).
+
+    // Buscador de destino: geocoding real de Mapbox (SearchEngine). Usa el
+    // mismo repositorio privado y el mismo token público que el Maps SDK.
+    implementation(libs.mapbox.search)
+    implementation(libs.kotlinx.coroutines.core)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.turbine)
 }

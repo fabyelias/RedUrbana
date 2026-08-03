@@ -14,6 +14,8 @@ data class Branch(
     val id: String,
     val name: String,
     val path: List<GeoPoint>,
+    /** Paradas ordenadas a lo largo de [path] (vacío si el proveedor no las conoce). */
+    val stops: List<Stop> = emptyList(),
 )
 
 data class RouteDetails(
@@ -30,6 +32,21 @@ data class Stop(
     val name: String,
     val location: GeoPoint,
     val routesServed: List<RouteId>,
+)
+
+/**
+ * Una línea candidata para ir de un origen a un destino, ordenada por
+ * [distanceToOriginMeters]. [stopsToDestination] es nullable porque no todo
+ * proveedor conoce las paradas ordenadas de una línea (ver [Branch.stops]).
+ */
+data class RouteRecommendation(
+    val routeId: RouteId,
+    val shortName: String,
+    val colorSeed: String,
+    val reliability: ReliabilityScore,
+    val distanceToOriginMeters: Double,
+    val distanceToDestinationMeters: Double,
+    val stopsToDestination: Int?,
 )
 
 data class ArrivalEstimate(

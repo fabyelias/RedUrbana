@@ -15,6 +15,7 @@ room = "2.6.1"
 retrofit = "2.11.0"
 okhttp = "4.12.0"
 mapboxMaps = "11.26.0"
+mapboxSearch = "2.27.0"
 playServicesLocation = "21.3.0"
 ksp = "2.0.20-1.0.25"
 turbine = "1.1.0"
@@ -55,6 +56,7 @@ okhttp-logging = { group = "com.squareup.okhttp3", name = "logging-interceptor",
 
 mapbox-maps = { group = "com.mapbox.maps", name = "android", version.ref = "mapboxMaps" }
 mapbox-compose = { group = "com.mapbox.extension", name = "maps-compose", version.ref = "mapboxMaps" }
+mapbox-search = { group = "com.mapbox.search", name = "mapbox-search-android", version.ref = "mapboxSearch" }
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
 
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }

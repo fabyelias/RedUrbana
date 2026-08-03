@@ -60,7 +60,9 @@ internal object MockRouteData {
             routeId = RouteId("60"),
             shortName = "60",
             company = "MONSA",
-            branches = listOf(Branch("R1", "Retiro / Constitución", route60Path)),
+            branches = listOf(
+                Branch("R1", "Retiro / Constitución", route60Path, stops = StopGenerator.generateStops(RouteId("60"), "Retiro / Constitución", route60Path)),
+            ),
             colorSeed = "60-red",
             reliability = ReliabilityScore(92),
         ),
@@ -68,7 +70,9 @@ internal object MockRouteData {
             routeId = RouteId("152"),
             shortName = "152",
             company = "Nuevos Rumbos",
-            branches = listOf(Branch("R2", "Olivos / Constitución", route152Path)),
+            branches = listOf(
+                Branch("R2", "Olivos / Constitución", route152Path, stops = StopGenerator.generateStops(RouteId("152"), "Olivos / Constitución", route152Path)),
+            ),
             colorSeed = "152-blue",
             reliability = ReliabilityScore(88),
         ),
@@ -76,7 +80,9 @@ internal object MockRouteData {
             routeId = RouteId("59"),
             shortName = "59",
             company = "Microómnibus Norte",
-            branches = listOf(Branch("R1", "Est. Bs. As. / Constitución", route59Path)),
+            branches = listOf(
+                Branch("R1", "Est. Bs. As. / Constitución", route59Path, stops = StopGenerator.generateStops(RouteId("59"), "Est. Bs. As. / Constitución", route59Path)),
+            ),
             colorSeed = "59-green",
             reliability = ReliabilityScore(95),
         ),
@@ -84,7 +90,9 @@ internal object MockRouteData {
             routeId = RouteId("37"),
             shortName = "37",
             company = "Ciudad de Buenos Aires SATCI",
-            branches = listOf(Branch("R1", "Villa Soldati", route37Path)),
+            branches = listOf(
+                Branch("R1", "Villa Soldati", route37Path, stops = StopGenerator.generateStops(RouteId("37"), "Villa Soldati", route37Path)),
+            ),
             colorSeed = "37-yellow",
             reliability = ReliabilityScore(84),
         ),

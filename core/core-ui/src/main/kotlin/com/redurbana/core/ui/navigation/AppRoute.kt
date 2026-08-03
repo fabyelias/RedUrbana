@@ -15,8 +15,14 @@ sealed interface AppRoute {
     @Serializable
     data object Dashboard : AppRoute
 
+    /**
+     * [routeId] null = se entró sin elegir destino (bottom nav directo): el
+     * mapa no dibuja ningún vehículo hasta que se elige una línea vía
+     * [Lines]. No-null = se navegó desde la recomendación de líneas, el
+     * mapa muestra solo esa línea.
+     */
     @Serializable
-    data object LiveMap : AppRoute
+    data class LiveMap(val routeId: String? = null) : AppRoute
 
     @Serializable
     data object Lines : AppRoute

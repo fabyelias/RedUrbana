@@ -52,11 +52,12 @@ internal object SyntheticFleetGenerator {
             val path = generateRadialPath(random, routeIndex, routeCount)
             val speed = (18..38).random(random).toFloat() // km/h, tránsito urbano realista
 
+            val branchName = "Recorrido sintético ${routeIndex + 1}"
             routes[routeId] = RouteDetails(
                 routeId = routeId,
                 shortName = "S${routeIndex + 1}",
                 company = syntheticCompanyName(random),
-                branches = listOf(Branch("R1", "Recorrido sintético ${routeIndex + 1}", path)),
+                branches = listOf(Branch("R1", branchName, path, stops = StopGenerator.generateStops(routeId, branchName, path))),
                 colorSeed = routeId.value,
                 reliability = ReliabilityScore((75..99).random(random)),
             )

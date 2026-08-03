@@ -8,6 +8,7 @@ import com.redurbana.domain.transport.model.ProviderCapabilities
 import com.redurbana.domain.transport.model.ReliabilityScore
 import com.redurbana.domain.transport.model.RouteDetails
 import com.redurbana.domain.transport.model.RouteId
+import com.redurbana.domain.transport.model.RouteRecommendation
 import com.redurbana.domain.transport.model.ServiceAlert
 import com.redurbana.domain.transport.model.Stop
 import com.redurbana.domain.transport.model.StopId
@@ -64,6 +65,9 @@ class FakeTransportDataProvider : TransportDataProvider {
     }
 
     override suspend fun getStopsNearby(location: GeoPoint, radiusMeters: Int): Result<List<Stop>> =
+        Result.success(emptyList())
+
+    override suspend fun getRouteRecommendations(origin: GeoPoint, destination: GeoPoint): Result<List<RouteRecommendation>> =
         Result.success(emptyList())
 
     override suspend fun getArrivalEstimates(stopId: StopId): Result<List<ArrivalEstimate>> =

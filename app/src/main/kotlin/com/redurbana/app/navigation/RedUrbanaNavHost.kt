@@ -22,6 +22,7 @@ import com.redurbana.core.ui.components.BottomNavItem
 import com.redurbana.core.ui.navigation.AppRoute
 import com.redurbana.feature.alerts.AlertsScreen
 import com.redurbana.feature.dashboard.DashboardScreen
+import com.redurbana.feature.lines.LinesScreen
 import com.redurbana.feature.map.LiveMapScreen
 import com.redurbana.feature.settings.SettingsScreen
 import com.redurbana.feature.stops.StopsScreen
@@ -56,7 +57,7 @@ fun RedUrbanaNavHost() {
                 onItemSelected = { item ->
                     val route: AppRoute = when (item) {
                         BottomNavItem.HOME -> AppRoute.Dashboard
-                        BottomNavItem.MAP -> AppRoute.LiveMap
+                        BottomNavItem.MAP -> AppRoute.LiveMap()
                         BottomNavItem.LINES -> AppRoute.Lines
                         BottomNavItem.MORE -> AppRoute.More
                     }
@@ -67,7 +68,7 @@ fun RedUrbanaNavHost() {
                     }
                 },
                 onCenterButtonClick = {
-                    navController.navigate(AppRoute.LiveMap) { launchSingleTop = true }
+                    navController.navigate(AppRoute.LiveMap()) { launchSingleTop = true }
                 },
             )
         },
@@ -89,6 +90,7 @@ fun RedUrbanaNavHost() {
                         onVehicleClick = { routeId, vehicleId ->
                             navController.navigate(AppRoute.VehicleDetail(routeId, vehicleId))
                         },
+                        onSearchDestinationClick = { navController.navigate(AppRoute.Lines) },
                     )
                 }
             }
@@ -109,8 +111,13 @@ fun RedUrbanaNavHost() {
             }
 
             composable<AppRoute.Lines> {
-                // TODO: feature-lines (roadmap paso siguiente)
-                ComingSoonScreen(title = "Líneas")
+                LinesScreen(
+                    onRouteSelected = { routeId ->
+                        navController.navigate(AppRoute.LiveMap(routeId)) {
+                            popUpTo(AppRoute.Lines) { inclusive = true }
+                        }
+                    },
+                )
             }
 
             composable<AppRoute.More> {
