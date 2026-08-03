@@ -15,7 +15,11 @@ room = "2.6.1"
 retrofit = "2.11.0"
 okhttp = "4.12.0"
 mapboxMaps = "11.26.0"
-mapboxSearch = "2.27.0"
+# mapboxSearch debe matchear el minor de mapboxMaps (11.26.0): Search SDK
+# 2.X.Y depende de mapbox-common 24.X.Y, y Maps SDK 11.X.Y trae
+# libmapbox-maps.so compilado contra ese mismo mapbox-common — un desfasaje
+# aborta el proceso en runtime con VersionMismatchException.
+mapboxSearch = "2.26.0"
 playServicesLocation = "21.3.0"
 ksp = "2.0.20-1.0.25"
 turbine = "1.1.0"
