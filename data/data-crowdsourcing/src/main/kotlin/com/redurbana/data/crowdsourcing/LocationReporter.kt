@@ -5,14 +5,23 @@ import com.redurbana.core.location.RawLocationSample
 import com.redurbana.domain.crowdsourcing.LocationSample
 import com.redurbana.domain.crowdsourcing.OnBusHeuristic
 import com.redurbana.domain.crowdsourcing.OnBusSignal
+import com.redurbana.domain.crowdsourcing.TripSessionController
 import com.redurbana.domain.crowdsourcing.model.CrowdPing
 import com.redurbana.domain.crowdsourcing.model.TripSessionId
 import com.redurbana.domain.crowdsourcing.usecase.ObserveCrowdSourcingOptInUseCase
 import com.redurbana.domain.crowdsourcing.usecase.ReportCrowdPingUseCase
 import com.redurbana.domain.transport.model.GeoPoint
+import com.redurbana.domain.transport.model.RouteId
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import java.util.UUID
 import javax.inject.Inject
@@ -20,35 +29,54 @@ import javax.inject.Singleton
 
 /**
  * Orquesta el reporte anónimo: solo escucha el GPS y solo manda pings
- * cuando el usuario tiene el opt-in activo Y [OnBusHeuristic] considera que
- * hay evidencia suficiente de "vas en colectivo". El resto del tiempo no
- * hace nada — ni escucha GPS siquiera, gracias a [flatMapLatest] cortando
- * el stream de ubicación apenas se apaga el opt-in.
+ * cuando el usuario tiene el opt-in activo Y eligió un viaje/línea (no un
+ * toggle global suelto — reportar sin saber a qué línea corresponde no le
+ * sirve a nadie) Y [OnBusHeuristic] considera que hay evidencia suficiente
+ * de "vas en colectivo". El resto del tiempo no hace nada — ni escucha GPS
+ * siquiera, gracias a [flatMapLatest] cortando el stream apenas falta
+ * cualquiera de esas dos condiciones.
  *
- * Se arranca desde la Application (o un Worker, para que sobreviva en
- * background) — no vive atado al ciclo de vida de ninguna pantalla,
- * a propósito: el usuario puede tener la app minimizada mientras viaja.
+ * Vive atado a la pantalla del mapa con línea elegida (ver LiveMapViewModel),
+ * no a `Application.onCreate()`: sin Foreground Service todavía (TODO ya
+ * documentado en RedUrbanaApplication.kt), reportar en background con la
+ * app minimizada queda fuera de alcance por ahora.
  */
 @Singleton
 class LocationReporter @Inject constructor(
     private val locationSource: DeviceLocationSource,
     private val observeOptIn: ObserveCrowdSourcingOptInUseCase,
     private val reportPing: ReportCrowdPingUseCase,
-) {
+) : TripSessionController {
+    private val reporterScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var collectingJob: Job? = null
+
+    private val activeTrip = MutableStateFlow<RouteId?>(null)
+
     private var currentSessionId: TripSessionId? = null
     private val sampleWindow = ArrayDeque<LocationSample>()
     private val windowMaxSize = 12 // ~12 muestras a intervalo de 5s ≈ 1 minuto de historia
 
-    suspend fun start() {
-        observeOptIn()
-            .flatMapLatest { optedIn ->
-                if (optedIn) locationSource.observeLocation(intervalMs = 5_000)
-                else flowOf<RawLocationSample>() // sin opt-in, ni se pide ubicación
-            }
-            .collectLatest { raw -> onNewSample(raw) }
+    /** Se llama al entrar/salir de la pantalla del mapa con una línea elegida. */
+    override fun setActiveTrip(routeId: RouteId?) {
+        activeTrip.value = routeId
+        if (routeId == null) currentSessionId = null // corta la sesión al salir del viaje
+        startIfNeeded()
     }
 
-    private suspend fun onNewSample(raw: RawLocationSample) {
+    /** Idempotente: llamarla varias veces no duplica el collector. */
+    private fun startIfNeeded() {
+        if (collectingJob?.isActive == true) return
+        collectingJob = reporterScope.launch {
+            combine(observeOptIn(), activeTrip) { optedIn, routeId -> optedIn to routeId }
+                .flatMapLatest { (optedIn, routeId) ->
+                    if (optedIn && routeId != null) locationSource.observeLocation(intervalMs = 5_000)
+                    else flowOf<RawLocationSample>() // sin opt-in o sin viaje elegido, ni se pide ubicación
+                }
+                .collectLatest { raw -> onNewSample(raw, activeTrip.value) }
+        }
+    }
+
+    private suspend fun onNewSample(raw: RawLocationSample, routeId: RouteId?) {
         val sample = LocationSample(
             position = GeoPoint(raw.latitude, raw.longitude),
             speedKmh = raw.speedMetersPerSecond * 3.6f,
@@ -58,7 +86,7 @@ class LocationReporter @Inject constructor(
         sampleWindow.addLast(sample)
         while (sampleWindow.size > windowMaxSize) sampleWindow.removeFirst()
 
-        when (val signal = OnBusHeuristic.evaluate(sampleWindow.toList())) {
+        when (OnBusHeuristic.evaluate(sampleWindow.toList())) {
             is OnBusSignal.LikelyOnBus -> {
                 val sessionId = currentSessionId ?: TripSessionId(UUID.randomUUID().toString()).also {
                     currentSessionId = it
@@ -70,7 +98,7 @@ class LocationReporter @Inject constructor(
                         speedKmh = sample.speedKmh,
                         bearingDegrees = sample.bearingDegrees,
                         timestamp = Clock.System.now(),
-                        candidateRouteId = null, // TODO: inferir por proximidad al trazado de una línea conocida
+                        candidateRouteId = routeId,
                     ),
                 )
             }

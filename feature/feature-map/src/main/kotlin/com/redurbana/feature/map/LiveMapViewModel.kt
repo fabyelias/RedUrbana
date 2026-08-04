@@ -3,6 +3,7 @@ package com.redurbana.feature.map
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.redurbana.domain.crowdsourcing.usecase.SetActiveCrowdSourcingTripUseCase
 import com.redurbana.domain.transport.FollowedVehicleController
 import com.redurbana.domain.transport.GeoBounds
 import com.redurbana.domain.transport.model.GeoPoint
@@ -47,6 +48,7 @@ class LiveMapViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val observeVehiclesInBounds: ObserveVehiclesInBoundsUseCase,
     private val followedVehicleController: FollowedVehicleController,
+    private val setActiveCrowdSourcingTrip: SetActiveCrowdSourcingTripUseCase,
 ) : ViewModel() {
 
     private val selectedRouteId: String? = savedStateHandle.get<String>("routeId")
@@ -67,9 +69,19 @@ class LiveMapViewModel @Inject constructor(
         // — evita procesar/dibujar la flota completa sin necesidad.
         if (selectedRouteId != null) {
             observeVisibleVehicles()
+            // El reporte anónimo de ubicación (crowdsourcing) queda ligado a
+            // esta pantalla: arranca acá, se corta en onCleared(). Si el
+            // usuario no tiene el opt-in prendido en Ajustes, esto no hace
+            // nada — LocationReporter chequea eso internamente.
+            setActiveCrowdSourcingTrip(RouteId(selectedRouteId))
         } else {
             _uiState.value = MapUiState.Success(vehicles = emptyList(), selectedRouteId = null)
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        if (selectedRouteId != null) setActiveCrowdSourcingTrip(null)
     }
 
     /** Se llama desde MapScreen en cada onCameraIdle del GoogleMap real. */

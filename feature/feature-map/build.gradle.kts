@@ -22,6 +22,7 @@ dependencies {
     implementation(project(":core:core-ui"))
     implementation(project(":core:core-common"))
     implementation(project(":domain:domain-transport"))
+    implementation(project(":domain:domain-crowdsourcing"))
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

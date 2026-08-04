@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
 }
@@ -24,8 +25,16 @@ dependencies {
 
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.datetime)
+    implementation(libs.kotlinx.serialization.json)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
+
+    // Cliente real de Supabase (crowd_pings / vehicle_group_estimates) — ver
+    // supabase/README.md. BOM alinea las versiones de los módulos de Supabase;
+    // el engine de Ktor (ktor-client-android) se elige aparte, no viene con el BOM.
+    implementation(platform(libs.supabase.bom))
+    implementation(libs.supabase.postgrest)
+    implementation(libs.ktor.client.android)
 
     testImplementation(libs.junit)
     testImplementation(libs.turbine)

@@ -21,6 +21,8 @@ mapboxMaps = "11.26.0"
 # aborta el proceso en runtime con VersionMismatchException.
 mapboxSearch = "2.26.0"
 playServicesLocation = "21.3.0"
+supabase = "3.7.0"
+ktor = "3.5.1"
 ksp = "2.0.20-1.0.25"
 turbine = "1.1.0"
 junit = "4.13.2"
@@ -62,6 +64,10 @@ mapbox-maps = { group = "com.mapbox.maps", name = "android", version.ref = "mapb
 mapbox-compose = { group = "com.mapbox.extension", name = "maps-compose", version.ref = "mapboxMaps" }
 mapbox-search = { group = "com.mapbox.search", name = "mapbox-search-android", version.ref = "mapboxSearch" }
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
+
+supabase-bom = { group = "io.github.jan-tennert.supabase", name = "bom", version.ref = "supabase" }
+supabase-postgrest = { group = "io.github.jan-tennert.supabase", name = "postgrest-kt" }
+ktor-client-android = { group = "io.ktor", name = "ktor-client-android", version.ref = "ktor" }
 
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }

@@ -1,6 +1,7 @@
 package com.redurbana.domain.crowdsourcing.usecase
 
 import com.redurbana.domain.crowdsourcing.CrowdSourcingRepository
+import com.redurbana.domain.crowdsourcing.TripSessionController
 import com.redurbana.domain.crowdsourcing.model.CrowdPing
 import com.redurbana.domain.crowdsourcing.model.VehicleGroupEstimate
 import com.redurbana.domain.transport.model.RouteId
@@ -30,4 +31,11 @@ class ObserveVehicleGroupEstimatesUseCase @Inject constructor(
     private val repository: CrowdSourcingRepository,
 ) {
     operator fun invoke(routeId: RouteId): Flow<List<VehicleGroupEstimate>> = repository.observeGroupEstimates(routeId)
+}
+
+/** Llamado por LiveMapViewModel al entrar/salir de la pantalla del mapa con una línea elegida. */
+class SetActiveCrowdSourcingTripUseCase @Inject constructor(
+    private val tripSessionController: TripSessionController,
+) {
+    operator fun invoke(routeId: RouteId?) = tripSessionController.setActiveTrip(routeId)
 }
