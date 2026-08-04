@@ -21,8 +21,14 @@ mapboxMaps = "11.26.0"
 # aborta el proceso en runtime con VersionMismatchException.
 mapboxSearch = "2.26.0"
 playServicesLocation = "21.3.0"
-supabase = "3.7.0"
-ktor = "3.5.1"
+# supabase/ktor pineados a la versión que coexistió con Kotlin 2.0.21 (mismo
+# minor que el 2.0.20 del proyecto) — versiones más nuevas del SDK de
+# Supabase están compiladas con Kotlin 2.4.x y el compilador 2.0.20 no puede
+# leer esos metadatos ("Module was compiled with an incompatible version of
+# Kotlin"). Subir esto requeriría subir Kotlin/KSP/Compose Compiler del
+# proyecto entero — no vale la pena solo por esto.
+supabase = "3.0.1"
+ktor = "3.0.0"
 ksp = "2.0.20-1.0.25"
 turbine = "1.1.0"
 junit = "4.13.2"

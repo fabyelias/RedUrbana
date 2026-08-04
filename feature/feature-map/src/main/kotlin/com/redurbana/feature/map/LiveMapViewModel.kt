@@ -5,11 +5,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.redurbana.domain.crowdsourcing.usecase.SetActiveCrowdSourcingTripUseCase
 import com.redurbana.domain.transport.FollowedVehicleController
-import com.redurbana.domain.transport.GeoBounds
 import com.redurbana.domain.transport.model.GeoPoint
 import com.redurbana.domain.transport.model.RouteId
 import com.redurbana.domain.transport.model.VehiclePosition
-import com.redurbana.domain.transport.usecase.ObserveVehiclesInBoundsUseCase
+import com.redurbana.domain.transport.usecase.ObserveVehiclesOnRouteUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -34,19 +33,25 @@ sealed interface MapUiState {
 
 /**
  * Igual que DashboardViewModel: solo conoce el UseCase, no el provider.
- * Cuando el usuario mueve el mapa, se debe llamar updateVisibleBounds()
- * para que el stream de vehículos se recorte al viewport actual (evita
- * pedir/renderizar toda la ciudad si el usuario está haciendo zoom en un barrio).
  *
- * El seguimiento de cámara (cameraTarget) se deriva del mismo Flow de vehículos
- * combinado con FollowedVehicleController: no agrega ningún tick ni polling
- * adicional, solo recalcula un valor derivado cuando de cualquier forma ya
- * llegó una posición nueva del vehículo seguido.
+ * A diferencia de una versión anterior, esto NO filtra por el viewport del
+ * mapa (observeVehiclesInBounds): la línea elegida puede estar en cualquier
+ * lado, lejos de dónde arranca la cámara por defecto — filtrar por bounds
+ * significaba que si el usuario no estaba ya mirando esa zona, nunca veía
+ * su colectivo. observeVehiclesOnRoute trae la línea elegida sin importar
+ * dónde esté la cámara.
+ *
+ * El seguimiento de cámara (cameraTarget) tiene dos disparadores: seguir
+ * un vehículo explícitamente (FollowedVehicleController), o —la primera
+ * vez que aparece data de la línea elegida— centrar ahí una sola vez, para
+ * que el mapa no se quede mostrando el punto de arranque por defecto
+ * (Congreso) si la línea está en otra zona. Después de ese primer centrado
+ * el usuario puede panear libremente sin que lo interrumpamos.
  */
 @HiltViewModel
 class LiveMapViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    private val observeVehiclesInBounds: ObserveVehiclesInBoundsUseCase,
+    private val observeVehiclesOnRoute: ObserveVehiclesOnRouteUseCase,
     private val followedVehicleController: FollowedVehicleController,
     private val setActiveCrowdSourcingTrip: SetActiveCrowdSourcingTripUseCase,
 ) : ViewModel() {
@@ -56,19 +61,14 @@ class LiveMapViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<MapUiState>(MapUiState.Loading)
     val uiState: StateFlow<MapUiState> = _uiState.asStateFlow()
 
-    private var currentBounds = GeoBounds(
-        northEast = GeoPoint(-34.58, -58.36),
-        southWest = GeoPoint(-34.64, -58.42),
-    )
+    private var hasCenteredOnRoute = false
 
     init {
         // Sin línea elegida (se entró directo desde el bottom nav, sin pasar
-        // por el buscador de destino): NO nos suscribimos a
-        // observeVehiclesInBounds. Al no haber ningún collector, la
-        // simulación compartida (shareIn WhileSubscribed) ni siquiera corre
-        // — evita procesar/dibujar la flota completa sin necesidad.
+        // por el buscador de destino): NO nos suscribimos a nada. Evita
+        // procesar/dibujar la flota completa sin necesidad.
         if (selectedRouteId != null) {
-            observeVisibleVehicles()
+            observeSelectedRoute(RouteId(selectedRouteId))
             // El reporte anónimo de ubicación (crowdsourcing) queda ligado a
             // esta pantalla: arranca acá, se corta en onCleared(). Si el
             // usuario no tiene el opt-in prendido en Ajustes, esto no hace
@@ -84,12 +84,6 @@ class LiveMapViewModel @Inject constructor(
         if (selectedRouteId != null) setActiveCrowdSourcingTrip(null)
     }
 
-    /** Se llama desde MapScreen en cada onCameraIdle del GoogleMap real. */
-    fun updateVisibleBounds(bounds: GeoBounds) {
-        currentBounds = bounds
-        if (selectedRouteId != null) observeVisibleVehicles()
-    }
-
     fun onVehicleSelected(vehicleId: String?) {
         val state = _uiState.value
         if (state is MapUiState.Success) {
@@ -97,21 +91,28 @@ class LiveMapViewModel @Inject constructor(
         }
     }
 
-    private fun observeVisibleVehicles() {
+    private fun observeSelectedRoute(routeId: RouteId) {
         viewModelScope.launch {
-            observeVehiclesInBounds(currentBounds)
+            observeVehiclesOnRoute(routeId)
                 .combine(followedVehicleController.followed) { vehicles, followed ->
-                    val vehiclesOnRoute = vehicles.filter { it.routeId == RouteId(selectedRouteId!!) }
                     val followedPosition = followed?.let { f ->
-                        vehiclesOnRoute.firstOrNull { it.vehicleId == f.vehicleId }
+                        vehicles.firstOrNull { it.vehicleId == f.vehicleId }
                     }
                     val previous = _uiState.value as? MapUiState.Success
+                    val cameraTarget = when {
+                        followedPosition != null -> followedPosition.position
+                        !hasCenteredOnRoute && vehicles.isNotEmpty() -> {
+                            hasCenteredOnRoute = true
+                            vehicles.first().position
+                        }
+                        else -> previous?.cameraTarget
+                    }
                     MapUiState.Success(
-                        vehicles = vehiclesOnRoute,
-                        selectedRouteId = selectedRouteId,
+                        vehicles = vehicles,
+                        selectedRouteId = routeId.value,
                         selectedVehicleId = previous?.selectedVehicleId,
                         isFollowing = followed != null,
-                        cameraTarget = followedPosition?.position,
+                        cameraTarget = cameraTarget,
                     )
                 }
                 .collect { newState -> _uiState.value = newState }

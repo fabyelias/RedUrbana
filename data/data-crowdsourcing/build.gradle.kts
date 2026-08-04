@@ -32,8 +32,13 @@ dependencies {
     // Cliente real de Supabase (crowd_pings / vehicle_group_estimates) — ver
     // supabase/README.md. BOM alinea las versiones de los módulos de Supabase;
     // el engine de Ktor (ktor-client-android) se elige aparte, no viene con el BOM.
+    // Excluye androidx.browser: es para flujos de Auth con Custom Tabs (no lo
+    // usamos, solo Postgrest) y exige compileSdk 36 + AGP 8.9.1+, más de lo
+    // que tiene este proyecto — sin la exclusión, ni compila.
     implementation(platform(libs.supabase.bom))
-    implementation(libs.supabase.postgrest)
+    implementation(libs.supabase.postgrest) {
+        exclude(group = "androidx.browser", module = "browser")
+    }
     implementation(libs.ktor.client.android)
 
     testImplementation(libs.junit)

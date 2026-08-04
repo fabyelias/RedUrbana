@@ -297,7 +297,7 @@ contrato `TransportDataProvider` (ningún cambio de interfaz de dominio).
 **Simulación (data-transport):**
 - Un único loop de simulación compartido vía `shareIn(WhileSubscribed)` — no uno por cada pantalla que observa.
 - `SpatialGrid`: índice en grilla uniforme para que "qué se ve en el viewport" sea O(celdas visibles), no O(flota completa).
-- `SyntheticFleetGenerator`: genera cientos/miles de vehículos sintéticos en decenas de líneas proceduales, para stress-testing real antes de tener datos oficiales. Configurable con dos constantes (`SYNTHETIC_ROUTE_COUNT`, `VEHICLES_PER_ROUTE`).
+- `RealRouteData`: carga `assets/real_routes.json` (138 líneas / 566 ramales reales de jurisdicción nacional CNRT en el AMBA, desde el dataset KML de datos.transporte.gob.ar) en background (`Dispatchers.IO`, vía un `Deferred` arrancado al construir `MockTransportProvider`) y simula un vehículo por ramal moviéndose sobre el trazado real. Reemplaza al viejo `SyntheticFleetGenerator` (recorridos radiales inventados alrededor de un centro fijo): las recomendaciones de línea ahora reflejan geometría real, así funcionan igual de bien en cualquier parte del país, no solo cerca de un centro hardcodeado.
 
 **Renderizado (feature-map):**
 - Se abandonó "un `Marker` nativo por colectivo" (no escala: cada uno es un objeto pesado del SDK).

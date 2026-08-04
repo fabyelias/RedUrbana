@@ -32,7 +32,6 @@ import com.mapbox.maps.plugin.animation.MapAnimationOptions
 import com.redurbana.core.ui.components.GlassCard
 import com.redurbana.core.ui.components.LiveBadge
 import com.redurbana.core.ui.theme.RedUrbanaColors
-import com.redurbana.domain.transport.GeoBounds
 import com.redurbana.domain.transport.model.GeoPoint
 import com.redurbana.feature.map.cluster.VehicleClusterer
 
@@ -133,7 +132,6 @@ fun LiveMapScreen(
                 mapView.mapboxMap.subscribeCameraChanged {
                     nativeMap = mapView.mapboxMap
                     currentZoom = mapView.mapboxMap.cameraState.zoom.toFloat()
-                    viewModel.updateVisibleBounds(mapView.mapboxMap.toGeoBounds())
                 }
             }
 
@@ -255,25 +253,3 @@ private fun ColdStartMessage(modifier: Modifier = Modifier) {
         )
     }
 }
-
-/**
- * Traduce el viewport actual de Mapbox a GeoBounds de dominio.
- * Es la ÚNICA función de todo feature-map que sabe que existe
- * CoordinateBounds de Mapbox — el resto de la feature trabaja en
- * GeoPoint/GeoBounds puros, igual que cuando esto usaba Google Maps.
- */
-private fun MapboxMap.toGeoBounds(): GeoBounds {
-    val bounds = coordinateBoundsForCamera(cameraState.toCameraOptions())
-    return GeoBounds(
-        northEast = GeoPoint(bounds.northeast.latitude(), bounds.northeast.longitude()),
-        southWest = GeoPoint(bounds.southwest.latitude(), bounds.southwest.longitude()),
-    )
-}
-
-private fun com.mapbox.maps.CameraState.toCameraOptions(): com.mapbox.maps.CameraOptions =
-    com.mapbox.maps.CameraOptions.Builder()
-        .center(center)
-        .zoom(zoom)
-        .bearing(bearing)
-        .pitch(pitch)
-        .build()

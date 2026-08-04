@@ -52,7 +52,7 @@ class SupabaseCrowdSourcingRepository @Inject constructor(
     override fun observeGroupEstimates(routeId: RouteId): Flow<List<VehicleGroupEstimate>> = flow {
         val estimates = try {
             supabaseClient.postgrest["vehicle_group_estimates"]
-                .select { eq("route_id", routeId.value) }
+                .select { filter { eq("route_id", routeId.value) } }
                 .decodeList<VehicleGroupEstimateRow>()
                 .map { it.toDomain() }
         } catch (e: Exception) {
