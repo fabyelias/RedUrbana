@@ -17,6 +17,7 @@ import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -25,8 +26,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,6 +61,7 @@ import com.redurbana.domain.transport.model.GeoPoint
 import com.redurbana.domain.transport.model.Stop
 import com.redurbana.domain.transport.model.TripItinerary
 import com.redurbana.domain.transport.model.TripLeg
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /**
@@ -87,10 +91,22 @@ fun ExploreMapScreen(
 
     var nativeMap by remember { mutableStateOf<MapboxMap?>(null) }
 
+    // Sin uso adentro salvo forzar recomposición: se incrementa en CADA
+    // cambio de cámara (pan, zoom o rotación). Antes solo currentZoom
+    // disparaba el redibujo del overlay, así que panear sin hacer zoom
+    // dejaba el punto azul / pin / recorrido pegados en su posición de
+    // pantalla vieja mientras el mapa se deslizaba debajo.
+    var cameraTick by remember { mutableIntStateOf(0) }
+    val recenterScope = rememberCoroutineScope()
+
+    // Vista panorámica neutral de CABA mientras se resuelve el GPS real — a
+    // propósito no es un punto/zoom específico que parezca "acá estás vos"
+    // (antes era Congreso a zoom de calle, que se mostraba como si fuera la
+    // ubicación real cuando el GPS no respondía a tiempo).
     val mapViewportState = rememberMapViewportState {
         setCameraOptions {
-            center(Point.fromLngLat(-58.3924, -34.6095)) // Congreso, se corrige apenas resuelve el GPS real
-            zoom(14.0)
+            center(Point.fromLngLat(-58.42, -34.62))
+            zoom(11.0)
         }
     }
 
@@ -101,6 +117,8 @@ fun ExploreMapScreen(
         }
     }
 
+    // Centrado único apenas resuelve el primer fix real — sin timeout ni
+    // fallback: si tarda, la cámara se queda en la vista panorámica de arriba.
     LaunchedEffect(Unit) {
         val origin = viewModel.initialCameraTarget()
         mapViewportState.flyTo(
@@ -158,11 +176,41 @@ fun ExploreMapScreen(
                         viewModel.onMapTapped(GeoPoint(point.latitude(), point.longitude()))
                         true
                     }
+                    mapView.mapboxMap.subscribeCameraChanged { cameraTick++ }
                     mapView.mapboxMap.subscribeStyleLoaded { addTrafficLayer(mapView.mapboxMap) }
                 }
             }
 
-            ExploreOverlay(uiState = uiState, liveLocation = liveLocation, mapboxMap = nativeMap, modifier = Modifier.fillMaxSize())
+            ExploreOverlay(
+                uiState = uiState,
+                liveLocation = liveLocation,
+                mapboxMap = nativeMap,
+                cameraTick = cameraTick,
+                modifier = Modifier.fillMaxSize(),
+            )
+
+            // Botón "mi ubicación" estilo Google Maps: recentra sin pelear
+            // con el usuario mientras panea buscando dónde ir.
+            if (liveLocation != null) {
+                FloatingActionButton(
+                    onClick = {
+                        recenterScope.launch {
+                            mapViewportState.flyTo(
+                                cameraOptions = com.mapbox.maps.CameraOptions.Builder()
+                                    .center(Point.fromLngLat(liveLocation.longitude, liveLocation.latitude))
+                                    .zoom(15.0)
+                                    .build(),
+                                animationOptions = MapAnimationOptions.mapAnimationOptions { duration(600) },
+                            )
+                        }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(bottom = 130.dp, end = 16.dp), // arriba del sheet, que arranca en 110.dp
+                ) {
+                    Text("📍")
+                }
+            }
         }
     }
 }
@@ -212,7 +260,15 @@ private fun routePoints(itinerary: TripItinerary): List<GeoPoint> = itinerary.le
  * recorrido elegido según el estado — solo dibuja, nunca intercepta gestos.
  */
 @Composable
-private fun ExploreOverlay(uiState: ExploreUiState, liveLocation: GeoPoint?, mapboxMap: MapboxMap?, modifier: Modifier = Modifier) {
+private fun ExploreOverlay(
+    uiState: ExploreUiState,
+    liveLocation: GeoPoint?,
+    mapboxMap: MapboxMap?,
+    modifier: Modifier = Modifier,
+    // Sin uso adentro: solo para forzar redibujo en cada cambio de cámara,
+    // incluido paneo puro sin zoom (ver comentario en ExploreMapScreen).
+    cameraTick: Int = 0,
+) {
     Canvas(modifier = modifier) {
         val map = mapboxMap ?: return@Canvas
         liveLocation?.let { drawUserLocationDot(map, it) }

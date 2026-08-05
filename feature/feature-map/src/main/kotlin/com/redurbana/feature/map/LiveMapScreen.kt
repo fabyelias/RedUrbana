@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -12,8 +13,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,6 +42,7 @@ import com.redurbana.core.ui.components.LiveBadge
 import com.redurbana.core.ui.theme.RedUrbanaColors
 import com.redurbana.domain.transport.model.GeoPoint
 import com.redurbana.feature.map.cluster.VehicleClusterer
+import kotlinx.coroutines.launch
 
 /**
  * Mapa principal de la app, sobre Mapbox Maps SDK (Compose extension).
@@ -83,14 +87,16 @@ fun LiveMapScreen(
         return
     }
 
-    // Congreso, CABA — mismo punto de partida que la referencia visual.
-    val congreso = Point.fromLngLat(-58.3924, -34.6095) // Mapbox: (lng, lat), OJO con el orden
-
+    // Vista panorámica neutral de CABA mientras se resuelve el GPS real —
+    // a propósito NO es un punto/zoom específico que pueda confundirse con
+    // "acá estás vos": eso pasaba antes con el fallback fijo a Congreso, que
+    // se mostraba como si fuera la ubicación real cuando el GPS no
+    // respondía a tiempo. En cuanto llega el primer fix real, el efecto de
+    // abajo hace zoom ahí una sola vez.
     val mapViewportState = rememberMapViewportState {
         setCameraOptions {
-            center(congreso)
-            zoom(16.0)
-            pitch(45.0) // tilt para que los edificios 3D se vean con perspectiva
+            center(Point.fromLngLat(-58.42, -34.62))
+            zoom(11.0)
         }
     }
 
@@ -106,6 +112,35 @@ fun LiveMapScreen(
     // y para leer bounds/zoom actuales — el equivalente a `Projection` de Google.
     var nativeMap by remember { mutableStateOf<MapboxMap?>(null) }
     var currentZoom by remember { mutableStateOf(16f) }
+
+    // Se incrementa en CADA cambio de cámara (pan, zoom o rotación). currentZoom
+    // solo no alcanza como disparador de redibujo: si el usuario solo panea
+    // (sin cambiar el zoom), currentZoom no cambia y el Canvas de abajo no se
+    // vuelve a dibujar — el punto azul y los colectivos quedan pegados en su
+    // posición de pantalla vieja mientras el mapa se desliza debajo, dando la
+    // sensación de que "el punto se mueve" o "el mapa se congela".
+    var cameraTick by remember { mutableIntStateOf(0) }
+
+    val userLocation = (uiState as? MapUiState.Success)?.userLocation
+    val recenterScope = rememberCoroutineScope()
+
+    // Centrado único apenas llega el primer fix real de GPS — sin fallback a
+    // ningún punto fijo: si el GPS tarda, la cámara simplemente se queda en
+    // la vista panorámica inicial hasta que haya una ubicación real.
+    var hasCenteredOnUser by remember { mutableStateOf(false) }
+    LaunchedEffect(userLocation) {
+        if (userLocation != null && !hasCenteredOnUser) {
+            hasCenteredOnUser = true
+            mapViewportState.flyTo(
+                cameraOptions = com.mapbox.maps.CameraOptions.Builder()
+                    .center(Point.fromLngLat(userLocation.longitude, userLocation.latitude))
+                    .zoom(16.0)
+                    .pitch(45.0)
+                    .build(),
+                animationOptions = MapAnimationOptions.mapAnimationOptions { duration(1000) },
+            )
+        }
+    }
 
     val cameraTarget = (uiState as? MapUiState.Success)?.cameraTarget
     LaunchedEffect(cameraTarget) {
@@ -137,6 +172,7 @@ fun LiveMapScreen(
                 mapView.mapboxMap.subscribeCameraChanged {
                     nativeMap = mapView.mapboxMap
                     currentZoom = mapView.mapboxMap.cameraState.zoom.toFloat()
+                    cameraTick++
                 }
                 mapView.mapboxMap.subscribeStyleLoaded { addTrafficLayer(mapView.mapboxMap) }
             }
@@ -167,7 +203,8 @@ fun LiveMapScreen(
                 }
             },
             modifier = Modifier.fillMaxSize(),
-            userLocation = (uiState as? MapUiState.Success)?.userLocation,
+            userLocation = userLocation,
+            cameraTick = cameraTick,
         )
 
         LiveBadge(
@@ -183,6 +220,30 @@ fun LiveMapScreen(
                 .padding(16.dp),
         ) {
             Text("Cambiar destino")
+        }
+
+        // Botón "mi ubicación" estilo Google Maps: recentra la cámara a
+        // demanda sin pelear con el usuario mientras panea libremente.
+        if (userLocation != null) {
+            FloatingActionButton(
+                onClick = {
+                    recenterScope.launch {
+                        mapViewportState.flyTo(
+                            cameraOptions = com.mapbox.maps.CameraOptions.Builder()
+                                .center(Point.fromLngLat(userLocation.longitude, userLocation.latitude))
+                                .zoom(16.0)
+                                .pitch(45.0)
+                                .build(),
+                            animationOptions = MapAnimationOptions.mapAnimationOptions { duration(600) },
+                        )
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp),
+            ) {
+                Text("📍")
+            }
         }
 
         when {

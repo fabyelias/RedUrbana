@@ -50,6 +50,11 @@ fun VehicleCanvasOverlay(
     onVehicleTap: (vehicleId: String) -> Unit,
     modifier: Modifier = Modifier,
     userLocation: GeoPoint? = null,
+    // Sin uso adentro: cambia en cada movimiento de cámara (incluido paneo
+    // puro, sin zoom) para forzar el redibujo del Canvas — sin esto, panear
+    // sin hacer zoom no invalida nada leído acá adentro y los puntos quedan
+    // pegados en su posición de pantalla vieja mientras el mapa se desliza.
+    cameraTick: Int = 0,
 ) {
     val textPaint = remember {
         Paint().apply {

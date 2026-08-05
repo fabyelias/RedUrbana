@@ -27,6 +27,13 @@ import javax.inject.Singleton
  * concedido, devuelve un Flow vacío en vez de crashear con
  * `SecurityException` — el pedido real del permiso (una sola vez, al abrir
  * la app) vive en `MainActivity`.
+ *
+ * PRIORITY_BALANCED_POWER_ACCURACY, no PRIORITY_HIGH_ACCURACY: la de alta
+ * precisión depende casi excluyentemente del chip GPS — en una tablet
+ * solo-WiFi (sin GPS ni datos móviles), FusedLocationProviderClient nunca
+ * llega a resolver un fix con esa prioridad y el Flow se queda mudo para
+ * siempre. La prioridad balanceada también acepta ubicación por red (WiFi),
+ * que sí está disponible en ese escenario.
  */
 @Singleton
 class FusedDeviceLocationSource @Inject constructor(
@@ -37,7 +44,7 @@ class FusedDeviceLocationSource @Inject constructor(
         LocationServices.getFusedLocationProviderClient(context)
     }
 
-    @SuppressLint("MissingPermission") // chequeado a mano antes de llamar a requestLocationUpdates
+    @SuppressLint("MissingPermission") // chequeado a mano antes de llamar a la API de ubicación
     override fun observeLocation(intervalMs: Long): Flow<RawLocationSample> = callbackFlow {
         val hasPermission = ContextCompat.checkSelfPermission(
             context,
@@ -49,27 +56,34 @@ class FusedDeviceLocationSource @Inject constructor(
             return@callbackFlow
         }
 
+        // Último fix cacheado (si existe): suele llegar casi al instante,
+        // mucho antes que el primer resultado de requestLocationUpdates —
+        // evita esperar de más para el primer centrado de cámara.
+        client.lastLocation.addOnSuccessListener { location ->
+            if (location != null) trySend(location.toRawSample())
+        }
+
         val request = LocationRequest.Builder(intervalMs)
-            .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
+            .setPriority(Priority.PRIORITY_BALANCED_POWER_ACCURACY)
             .build()
 
         val callback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 val location = result.lastLocation ?: return
-                trySend(
-                    RawLocationSample(
-                        latitude = location.latitude,
-                        longitude = location.longitude,
-                        speedMetersPerSecond = location.speed,
-                        bearingDegrees = location.bearing,
-                        timestamp = Instant.fromEpochMilliseconds(location.time),
-                        accuracyMeters = location.accuracy,
-                    ),
-                )
+                trySend(location.toRawSample())
             }
         }
 
         client.requestLocationUpdates(request, callback, null)
         awaitClose { client.removeLocationUpdates(callback) }
     }
+
+    private fun android.location.Location.toRawSample() = RawLocationSample(
+        latitude = latitude,
+        longitude = longitude,
+        speedMetersPerSecond = speed,
+        bearingDegrees = bearing,
+        timestamp = Instant.fromEpochMilliseconds(time),
+        accuracyMeters = accuracy,
+    )
 }

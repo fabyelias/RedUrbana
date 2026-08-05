@@ -12,7 +12,6 @@ import com.redurbana.domain.transport.model.VehiclePosition
 import com.redurbana.domain.transport.model.distanceMeters
 import com.redurbana.domain.transport.usecase.ObserveVehiclesOnRouteUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,7 +19,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-private const val LOCATION_TIMEOUT_MS = 8_000L
 private const val ARRIVAL_THRESHOLD_METERS = 200.0
 
 sealed interface MapUiState {
@@ -49,19 +47,18 @@ sealed interface MapUiState {
  * su colectivo. observeVehiclesOnRoute trae la línea elegida sin importar
  * dónde esté la cámara.
  *
- * El centrado inicial de cámara usa la ubicación REAL del dispositivo (con
- * fallback a Congreso solo si no hay GPS a tiempo), no la posición de un
- * vehículo cualquiera de la línea: un colectivo real puede tener un
- * recorrido de decenas de km (ej. la 60 va de La Boca a Tigre), así que
- * "centrar en el primer vehículo" podía abrir el mapa en cualquier punto
- * del recorrido, lejos de donde está el usuario. El seguimiento de cámara
- * (cameraTarget) tiene entonces dos disparadores: seguir un vehículo
- * explícitamente (FollowedVehicleController), o la ubicación real del
- * usuario la primera vez que se resuelve. Después de ese primer centrado
- * el usuario puede panear/hacer zoom libremente sin que lo interrumpamos —
- * pero [MapUiState.Success.userLocation] se sigue actualizando todo el
- * tiempo (no una sola vez), para poder dibujar un punto "estás acá" que te
- * sigue si te movés, aunque la cámara ya no te siga a vos.
+ * cameraTarget acá es EXCLUSIVAMENTE la posición del vehículo seguido (o
+ * null si no se sigue a nadie) — no vehículo cualquiera de la línea: un
+ * colectivo real puede tener un recorrido de decenas de km (ej. la 60 va de
+ * La Boca a Tigre), así que "centrar en el primer vehículo" podía abrir el
+ * mapa en cualquier punto del recorrido, lejos de donde está el usuario.
+ *
+ * El centrado inicial en la ubicación del usuario y el botón de recentrado
+ * NO viven acá: los maneja LiveMapScreen directo con [MapUiState.Success.userLocation]
+ * (que se sigue actualizando todo el tiempo, sin fallback a ningún punto
+ * fijo — antes había un fallback a Congreso que, si el GPS nunca respondía,
+ * quedaba pegado ahí para siempre y se mostraba como si fuera la ubicación
+ * real del usuario; se sacó por completo).
  */
 @HiltViewModel
 class LiveMapViewModel @Inject constructor(
@@ -90,10 +87,9 @@ class LiveMapViewModel @Inject constructor(
 
     /**
      * Ubicación real, en vivo — se sigue actualizando todo el tiempo que
-     * esta pantalla esté abierta (no una sola vez). El fallback a Congreso
-     * solo se aplica si el GPS no respondió dentro de [LOCATION_TIMEOUT_MS]
-     * Y no lo pisa si el GPS real llega más tarde (watchLocation sigue
-     * corrigiendo el valor en cuanto haya una posición real).
+     * esta pantalla esté abierta. Null hasta que llegue el primer fix real;
+     * sin fallback a ningún punto fijo — un valor falso acá se dibujaría
+     * como si fuera la posición real del usuario.
      */
     private val realLocation = MutableStateFlow<GeoPoint?>(null)
 
@@ -125,10 +121,6 @@ class LiveMapViewModel @Inject constructor(
      * background por mucho tiempo o el proceso muere.
      */
     private fun watchLocation() {
-        viewModelScope.launch {
-            delay(LOCATION_TIMEOUT_MS)
-            if (realLocation.value == null) realLocation.value = FALLBACK_LOCATION
-        }
         viewModelScope.launch {
             locationSource.observeLocation().collect { sample ->
                 val current = GeoPoint(sample.latitude, sample.longitude)
@@ -164,24 +156,15 @@ class LiveMapViewModel @Inject constructor(
                     vehicles.firstOrNull { it.vehicleId == f.vehicleId }
                 }
                 val previous = _uiState.value as? MapUiState.Success
-                val cameraTarget = when {
-                    followedPosition != null -> followedPosition.position
-                    previous?.cameraTarget == null -> userLocation
-                    else -> previous.cameraTarget
-                }
                 MapUiState.Success(
                     vehicles = vehicles,
                     selectedRouteId = routeId.value,
                     selectedVehicleId = previous?.selectedVehicleId,
                     isFollowing = followed != null,
-                    cameraTarget = cameraTarget,
+                    cameraTarget = followedPosition?.position,
                     userLocation = userLocation,
                 )
             }.collect { newState -> _uiState.value = newState }
         }
-    }
-
-    private companion object {
-        val FALLBACK_LOCATION = GeoPoint(latitude = -34.6095, longitude = -58.3924) // Congreso, CABA
     }
 }

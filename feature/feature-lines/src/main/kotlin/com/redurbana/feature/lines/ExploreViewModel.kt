@@ -14,7 +14,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
 /**
@@ -38,9 +37,6 @@ sealed interface ExploreUiState {
 
     data class ItineraryDetail(val itinerary: TripItinerary, val previous: Recommending) : ExploreUiState
 }
-
-private val FALLBACK_ORIGIN = GeoPoint(latitude = -34.6095, longitude = -58.3924) // Congreso, CABA
-private const val LOCATION_TIMEOUT_MS = 8_000L
 
 @HiltViewModel
 class ExploreViewModel @Inject constructor(
@@ -75,14 +71,14 @@ class ExploreViewModel @Inject constructor(
         }
     }
 
-    /** Para que ExploreMapScreen centre la cámara inicial sin duplicar la lógica de GPS. */
-    suspend fun initialCameraTarget(): GeoPoint {
-        _liveLocation.value?.let { return it }
-        return withTimeoutOrNull(LOCATION_TIMEOUT_MS) { _liveLocation.filterNotNull().first() } ?: FALLBACK_ORIGIN
-    }
-
-    /** Última posición real conocida, o el fallback si todavía no hay ninguna — para cálculos que no pueden esperar. */
-    private fun currentOriginOrFallback(): GeoPoint = _liveLocation.value ?: FALLBACK_ORIGIN
+    /**
+     * Para que ExploreMapScreen centre la cámara inicial sin duplicar la
+     * lógica de GPS. Espera sin límite de tiempo al primer fix real — antes
+     * había un timeout de 8s que caía a un fallback fijo en Congreso, que se
+     * mostraba como si fuera la ubicación real del usuario cuando el GPS
+     * tardaba más de eso (y en dispositivos sin chip GPS, nunca corregía).
+     */
+    suspend fun initialCameraTarget(): GeoPoint = _liveLocation.filterNotNull().first()
 
     fun onMapTapped(point: GeoPoint) {
         viewModelScope.launch {
@@ -99,13 +95,25 @@ class ExploreViewModel @Inject constructor(
 
     fun onDestinationConfirmed() {
         val current = _uiState.value as? ExploreUiState.ConfirmingDestination ?: return
+        val origin = _liveLocation.value
+        if (origin == null) {
+            // Sin fallback silencioso a Congreso: calcular alternativas
+            // "desde Congreso" cuando el usuario está en otro lado daba
+            // resultados que no tenían nada que ver con dónde está parado.
+            _uiState.value = ExploreUiState.Recommending(
+                destination = current.point,
+                destinationName = current.placeName,
+                isLoading = false,
+                error = "Todavía no pudimos ubicarte — probá de nuevo en unos segundos.",
+            )
+            return
+        }
         viewModelScope.launch {
             _uiState.value = ExploreUiState.Recommending(
                 destination = current.point,
                 destinationName = current.placeName,
                 isLoading = true,
             )
-            val origin = currentOriginOrFallback()
             getTripItineraries(origin, current.point)
                 .onSuccess { itineraries ->
                     _uiState.value = ExploreUiState.Recommending(
