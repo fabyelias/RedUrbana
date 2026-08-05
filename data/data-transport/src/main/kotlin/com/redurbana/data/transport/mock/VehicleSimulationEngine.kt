@@ -16,7 +16,7 @@ import kotlin.random.Random
  *
  * No tiene ninguna dependencia de Android: es Kotlin puro y testeable.
  */
-internal class SimulatedVehicle(
+class SimulatedVehicle(
     val vehicleId: VehicleId,
     val routeId: RouteId,
     val branchId: String,

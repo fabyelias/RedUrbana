@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
 import com.mapbox.geojson.Point
 import com.mapbox.maps.extension.compose.annotation.ViewAnnotation
+import com.mapbox.maps.viewannotation.geometry
 import com.mapbox.maps.viewannotation.viewAnnotationOptions
 import com.redurbana.core.ui.theme.LineColorProvider
 import com.redurbana.core.ui.theme.RedUrbanaColors

@@ -11,6 +11,7 @@ import com.redurbana.domain.transport.model.RouteId
 import com.redurbana.domain.transport.model.ServiceAlert
 import com.redurbana.domain.transport.model.Stop
 import com.redurbana.domain.transport.model.StopId
+import com.redurbana.domain.transport.model.TripItinerary
 import com.redurbana.domain.transport.model.VehicleId
 import com.redurbana.domain.transport.model.VehiclePosition
 import kotlinx.coroutines.flow.Flow
@@ -60,6 +61,9 @@ class GcbaOfficialApiProvider @Inject constructor(
         Result.failure(NotImplementedError("GcbaOfficialApiProvider: pendiente"))
 
     override suspend fun getStopsNearby(location: GeoPoint, radiusMeters: Int): Result<List<Stop>> =
+        Result.failure(NotImplementedError("GcbaOfficialApiProvider: pendiente"))
+
+    override suspend fun getTripItineraries(origin: GeoPoint, destination: GeoPoint): Result<List<TripItinerary>> =
         Result.failure(NotImplementedError("GcbaOfficialApiProvider: pendiente"))
 
     override suspend fun getArrivalEstimates(stopId: StopId): Result<List<ArrivalEstimate>> =

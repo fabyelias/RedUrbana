@@ -21,7 +21,7 @@ import com.redurbana.core.ui.components.BottomNavBar
 import com.redurbana.core.ui.components.BottomNavItem
 import com.redurbana.core.ui.navigation.AppRoute
 import com.redurbana.feature.alerts.AlertsScreen
-import com.redurbana.feature.dashboard.DashboardScreen
+import com.redurbana.feature.lines.ExploreMapScreen
 import com.redurbana.feature.map.LiveMapScreen
 import com.redurbana.feature.settings.SettingsScreen
 import com.redurbana.feature.stops.StopsScreen
@@ -38,8 +38,6 @@ fun RedUrbanaNavHost() {
     val backStackEntry by navController.currentBackStackEntryAsState()
 
     val selectedItem = when {
-        backStackEntry?.destination?.hasRoute(AppRoute.LiveMap::class) == true -> BottomNavItem.MAP
-        backStackEntry?.destination?.hasRoute(AppRoute.Lines::class) == true -> BottomNavItem.LINES
         backStackEntry?.destination?.hasRoute(AppRoute.More::class) == true -> BottomNavItem.MORE
         backStackEntry?.destination?.hasRoute(AppRoute.Stops::class) == true -> BottomNavItem.MORE
         backStackEntry?.destination?.hasRoute(AppRoute.Favorites::class) == true -> BottomNavItem.MORE
@@ -55,9 +53,7 @@ fun RedUrbanaNavHost() {
                 selected = selectedItem,
                 onItemSelected = { item ->
                     val route: AppRoute = when (item) {
-                        BottomNavItem.HOME -> AppRoute.Dashboard
-                        BottomNavItem.MAP -> AppRoute.LiveMap
-                        BottomNavItem.LINES -> AppRoute.Lines
+                        BottomNavItem.HOME -> AppRoute.Explore
                         BottomNavItem.MORE -> AppRoute.More
                     }
                     navController.navigate(route) {
@@ -67,20 +63,31 @@ fun RedUrbanaNavHost() {
                     }
                 },
                 onCenterButtonClick = {
-                    navController.navigate(AppRoute.LiveMap) { launchSingleTop = true }
+                    navController.navigate(AppRoute.LiveMap()) { launchSingleTop = true }
                 },
             )
         },
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = AppRoute.Dashboard,
+            startDestination = AppRoute.Explore,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
         ) {
-            composable<AppRoute.Dashboard> {
-                DashboardScreen()
+            composable<AppRoute.Explore> {
+                ExploreMapScreen(
+                    onStartTrip = { routeId, alightingStop ->
+                        navController.navigate(
+                            AppRoute.LiveMap(
+                                routeId = routeId,
+                                alightingLat = alightingStop.location.latitude.toString(),
+                                alightingLng = alightingStop.location.longitude.toString(),
+                                alightingStopName = alightingStop.name,
+                            ),
+                        )
+                    },
+                )
             }
 
             composable<AppRoute.LiveMap> {
@@ -89,6 +96,7 @@ fun RedUrbanaNavHost() {
                         onVehicleClick = { routeId, vehicleId ->
                             navController.navigate(AppRoute.VehicleDetail(routeId, vehicleId))
                         },
+                        onSearchDestinationClick = { navController.navigate(AppRoute.Explore) },
                     )
                 }
             }
@@ -106,11 +114,6 @@ fun RedUrbanaNavHost() {
                         onShareClick = { /* TODO: Intent nativo de compartir */ },
                     )
                 }
-            }
-
-            composable<AppRoute.Lines> {
-                // TODO: feature-lines (roadmap paso siguiente)
-                ComingSoonScreen(title = "Líneas")
             }
 
             composable<AppRoute.More> {

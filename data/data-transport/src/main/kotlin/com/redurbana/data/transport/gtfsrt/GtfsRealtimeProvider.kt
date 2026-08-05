@@ -11,6 +11,7 @@ import com.redurbana.domain.transport.model.RouteId
 import com.redurbana.domain.transport.model.ServiceAlert
 import com.redurbana.domain.transport.model.Stop
 import com.redurbana.domain.transport.model.StopId
+import com.redurbana.domain.transport.model.TripItinerary
 import com.redurbana.domain.transport.model.VehicleId
 import com.redurbana.domain.transport.model.VehiclePosition
 import kotlinx.coroutines.flow.Flow
@@ -76,6 +77,9 @@ class GtfsRealtimeProvider @Inject constructor(
 
     override suspend fun getStopsNearby(location: GeoPoint, radiusMeters: Int): Result<List<Stop>> =
         Result.failure(NotImplementedError("GtfsRealtimeProvider: requiere el feed estático GTFS (stops.txt)"))
+
+    override suspend fun getTripItineraries(origin: GeoPoint, destination: GeoPoint): Result<List<TripItinerary>> =
+        Result.failure(NotImplementedError("GtfsRealtimeProvider: requiere el feed estático GTFS (shapes.txt/stops.txt)"))
 
     override suspend fun getArrivalEstimates(stopId: StopId): Result<List<ArrivalEstimate>> =
         Result.failure(NotImplementedError("GtfsRealtimeProvider: pendiente de TripUpdates.pb"))

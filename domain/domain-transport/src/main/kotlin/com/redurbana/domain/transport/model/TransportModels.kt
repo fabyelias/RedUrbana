@@ -14,6 +14,8 @@ data class Branch(
     val id: String,
     val name: String,
     val path: List<GeoPoint>,
+    /** Paradas ordenadas a lo largo de [path] (vacío si el proveedor no las conoce). */
+    val stops: List<Stop> = emptyList(),
 )
 
 data class RouteDetails(

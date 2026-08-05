@@ -21,17 +21,15 @@ import androidx.compose.ui.unit.dp
 import com.redurbana.core.ui.theme.RedUrbanaColors
 
 enum class BottomNavItem(val label: String, val icon: String) {
-    HOME("Inicio", "🏠"),
-    MAP("Mapa en vivo", "🗺️"),
-    LINES("Líneas", "🚍"),
+    HOME("Explorar", "🏠"),
     MORE("Más", "⋯"),
 }
 
 /**
- * Barra inferior con botón central elevado (acceso directo a Mapa en vivo /
- * búsqueda rápida), tal como en la referencia. El ícono central no forma
- * parte de BottomNavItem: se maneja con su propio callback porque su acción
- * (abrir búsqueda o centrar el mapa) puede variar según la pantalla activa.
+ * Barra inferior con botón central elevado (acceso directo al mapa en vivo),
+ * tal como en la referencia. El ícono central no forma parte de
+ * BottomNavItem: no hace falta un slot aparte para "Mapa en vivo" — sería
+ * redundante con este mismo botón, que ya lleva ahí.
  */
 @Composable
 fun BottomNavBar(
@@ -49,9 +47,7 @@ fun BottomNavBar(
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
             NavSlot(BottomNavItem.HOME, selected, onItemSelected, Modifier)
-            NavSlot(BottomNavItem.MAP, selected, onItemSelected, Modifier)
             Box(modifier = Modifier.size(56.dp)) // espacio reservado para el botón central
-            NavSlot(BottomNavItem.LINES, selected, onItemSelected, Modifier)
             NavSlot(BottomNavItem.MORE, selected, onItemSelected, Modifier)
         }
 

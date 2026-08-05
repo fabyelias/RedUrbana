@@ -12,14 +12,38 @@ import kotlinx.serialization.Serializable
  */
 sealed interface AppRoute {
 
+    /**
+     * Pantalla de inicio de toda la app: mapa persistente donde se elige el
+     * destino tocando el mapa (reemplaza a la vieja Dashboard y a la
+     * búsqueda por texto). Ver `feature-lines/ExploreMapScreen`.
+     */
     @Serializable
-    data object Dashboard : AppRoute
+    data object Explore : AppRoute
 
+    /**
+     * [routeId] null = se entró sin elegir destino (bottom nav directo): el
+     * mapa no dibuja ningún vehículo hasta que se elige una línea desde
+     * [Explore]. No-null = se navegó desde un itinerario elegido, el mapa
+     * muestra solo esa línea.
+     *
+     * [alightingLat]/[alightingLng]/[alightingStopName] son opcionales: solo
+     * vienen completos cuando se llega acá desde "Iniciar viaje" — es lo que
+     * le permite al mapa avisar "bajate en la próxima parada" cuando el
+     * usuario se acerca de verdad.
+     *
+     * [alightingLat]/[alightingLng] son String (no Double): Navigation
+     * Compose serializa rutas tipadas solo con String/Int/Float/Long/Boolean
+     * (y sus versiones nullable) — Double no tiene un NavType propio y
+     * crashea en runtime con "Cannot cast ... to a NavType". Se parsean con
+     * toDoubleOrNull() del lado de quien los lee (LiveMapViewModel).
+     */
     @Serializable
-    data object LiveMap : AppRoute
-
-    @Serializable
-    data object Lines : AppRoute
+    data class LiveMap(
+        val routeId: String? = null,
+        val alightingLat: String? = null,
+        val alightingLng: String? = null,
+        val alightingStopName: String? = null,
+    ) : AppRoute
 
     @Serializable
     data object More : AppRoute

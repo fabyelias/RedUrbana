@@ -21,6 +21,7 @@ android {
 dependencies {
     implementation(project(":core:core-ui"))
     implementation(project(":core:core-common"))
+    implementation(project(":core:core-location"))
     implementation(project(":domain:domain-transport"))
 
     implementation(platform(libs.compose.bom))

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Copiar este archivo a src/main/res/values/mapbox_token.xml y completar
+      con el mismo token PÚBLICO de Mapbox (pk.*) que ya está en
+      app/src/main/res/values/mapbox.xml — ver docs/CREDENTIALS_SETUP.md
+      sección 2.
+
+      Por qué existe una copia acá: el Mapbox Maps SDK autodetecta
+      "mapbox_access_token" en :app para inicializarse, pero WalkingDirectionsClient
+      (data-transport) hace una llamada REST directa a la API de Directions y
+      necesita leer el token por código — un módulo de librería no puede leer
+      recursos de :app (que depende de él), así que vive acá, en core-common,
+      del que sí depende data-transport. Mismo criterio que supabase_url en
+      data-crowdsourcing.
+
+      mapbox_token.xml está en .gitignore por el mismo motivo que mapbox.xml:
+      GitHub push protection lo bloquea como secreto aunque el token sea
+      público. Este archivo vive fuera de res/values/ a propósito: el
+      merger de recursos de Android procesa TODO archivo dentro de
+      res/values/ como recurso y rechaza cualquiera que no termine en .xml
+      exacto (mismo motivo que mapbox.xml.example en :app).
+    -->
+    <string name="mapbox_public_token" translatable="false">pk.TU_TOKEN_PUBLICO_ACA</string>
+</resources>

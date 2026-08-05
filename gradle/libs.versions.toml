@@ -15,7 +15,20 @@ room = "2.6.1"
 retrofit = "2.11.0"
 okhttp = "4.12.0"
 mapboxMaps = "11.26.0"
+# mapboxSearch debe matchear el minor de mapboxMaps (11.26.0): Search SDK
+# 2.X.Y depende de mapbox-common 24.X.Y, y Maps SDK 11.X.Y trae
+# libmapbox-maps.so compilado contra ese mismo mapbox-common — un desfasaje
+# aborta el proceso en runtime con VersionMismatchException.
+mapboxSearch = "2.26.0"
 playServicesLocation = "21.3.0"
+# supabase/ktor pineados a la versión que coexistió con Kotlin 2.0.21 (mismo
+# minor que el 2.0.20 del proyecto) — versiones más nuevas del SDK de
+# Supabase están compiladas con Kotlin 2.4.x y el compilador 2.0.20 no puede
+# leer esos metadatos ("Module was compiled with an incompatible version of
+# Kotlin"). Subir esto requeriría subir Kotlin/KSP/Compose Compiler del
+# proyecto entero — no vale la pena solo por esto.
+supabase = "3.0.1"
+ktor = "3.0.0"
 ksp = "2.0.20-1.0.25"
 turbine = "1.1.0"
 junit = "4.13.2"
@@ -55,7 +68,12 @@ okhttp-logging = { group = "com.squareup.okhttp3", name = "logging-interceptor",
 
 mapbox-maps = { group = "com.mapbox.maps", name = "android", version.ref = "mapboxMaps" }
 mapbox-compose = { group = "com.mapbox.extension", name = "maps-compose", version.ref = "mapboxMaps" }
+mapbox-search = { group = "com.mapbox.search", name = "mapbox-search-android", version.ref = "mapboxSearch" }
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
+
+supabase-bom = { group = "io.github.jan-tennert.supabase", name = "bom", version.ref = "supabase" }
+supabase-postgrest = { group = "io.github.jan-tennert.supabase", name = "postgrest-kt" }
+ktor-client-android = { group = "io.ktor", name = "ktor-client-android", version.ref = "ktor" }
 
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }

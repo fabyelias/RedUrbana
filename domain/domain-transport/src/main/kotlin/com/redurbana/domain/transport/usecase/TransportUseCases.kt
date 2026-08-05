@@ -57,6 +57,13 @@ class GetStopsNearbyUseCase @Inject constructor(
         provider.getStopsNearby(location, radiusMeters)
 }
 
+class GetTripItinerariesUseCase @Inject constructor(
+    private val provider: TransportDataProvider,
+) {
+    suspend operator fun invoke(origin: GeoPoint, destination: GeoPoint): Result<List<com.redurbana.domain.transport.model.TripItinerary>> =
+        provider.getTripItineraries(origin, destination)
+}
+
 class GetServiceAlertsUseCase @Inject constructor(
     private val provider: TransportDataProvider,
 ) {

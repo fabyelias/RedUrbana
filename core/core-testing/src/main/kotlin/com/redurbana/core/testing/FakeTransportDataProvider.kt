@@ -11,6 +11,7 @@ import com.redurbana.domain.transport.model.RouteId
 import com.redurbana.domain.transport.model.ServiceAlert
 import com.redurbana.domain.transport.model.Stop
 import com.redurbana.domain.transport.model.StopId
+import com.redurbana.domain.transport.model.TripItinerary
 import com.redurbana.domain.transport.model.VehicleId
 import com.redurbana.domain.transport.model.VehiclePosition
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -64,6 +65,9 @@ class FakeTransportDataProvider : TransportDataProvider {
     }
 
     override suspend fun getStopsNearby(location: GeoPoint, radiusMeters: Int): Result<List<Stop>> =
+        Result.success(emptyList())
+
+    override suspend fun getTripItineraries(origin: GeoPoint, destination: GeoPoint): Result<List<TripItinerary>> =
         Result.success(emptyList())
 
     override suspend fun getArrivalEstimates(stopId: StopId): Result<List<ArrivalEstimate>> =
