@@ -70,6 +70,11 @@ class TripPlanner @Inject constructor(
     ): List<TripItinerary> = coroutineScope {
         val directCandidates = findDirectCandidates(routes, origin, destination)
             .sortedBy { it.branch.stops[it.boardIndex].location.distanceMeters(origin) }
+            // Sin esto, una sola línea con muchos ramales casi idénticos (común
+            // en el dataset real: p. ej. la línea 015 tiene 12 ramales que
+            // arrancan en el mismo punto) podía copar las top 5 alternativas
+            // con variantes de sí misma, en vez de mostrar líneas distintas.
+            .distinctBy { it.route.routeId }
 
         val transferCandidates = directCandidates
             .take(MAX_TRANSFER_SEED_ROUTES)
@@ -98,18 +103,38 @@ class TripPlanner @Inject constructor(
         route.branches.mapNotNull { branch -> directCandidateFor(route, branch, origin, destination) }
     }
 
-    /** Ramal más cercano al origen, con el destino REALMENTE más adelante en su dirección de viaje (no `abs()`). */
+    /**
+     * Mejor combinación (parada de subida, parada de bajada) de este ramal,
+     * con el destino REALMENTE más adelante en la dirección de viaje (no
+     * `abs()` — un colectivo no puede "ir para atrás" para dejarte más
+     * cerca).
+     *
+     * Evalúa TODAS las paradas caminables desde el origen como posible
+     * subida, no solo la más cercana: si esa única parada más cercana queda
+     * más adelante en el recorrido que la parada más cercana al destino
+     * (recorridos que curvan o vuelven cerca de sí mismos), antes no
+     * quedaba ningún índice de bajada válido "hacia adelante" y el ramal
+     * entero se descartaba — aunque otra parada de subida un poco más lejos
+     * sí hubiera servido. Con recorridos largos esto hacía que la búsqueda
+     * casi nunca encontrara nada.
+     */
     private fun directCandidateFor(route: RouteDetails, branch: Branch, origin: GeoPoint, destination: GeoPoint): DirectCandidate? {
         val stops = branch.stops
         if (stops.isEmpty()) return null
-        val boardIndex = stops.indices.minByOrNull { stops[it].location.distanceMeters(origin) } ?: return null
-        if (stops[boardIndex].location.distanceMeters(origin) > MAX_WALK_TO_STOP_METERS) return null
 
-        val alightIndex = (boardIndex + 1 until stops.size)
-            .minByOrNull { stops[it].location.distanceMeters(destination) } ?: return null
-        if (stops[alightIndex].location.distanceMeters(destination) > MAX_WALK_TO_STOP_METERS) return null
-
-        return DirectCandidate(route, branch, boardIndex, alightIndex)
+        return stops.indices
+            .asSequence()
+            .filter { stops[it].location.distanceMeters(origin) <= MAX_WALK_TO_STOP_METERS }
+            .mapNotNull { boardIndex ->
+                val alightIndex = (boardIndex + 1 until stops.size)
+                    .minByOrNull { stops[it].location.distanceMeters(destination) } ?: return@mapNotNull null
+                if (stops[alightIndex].location.distanceMeters(destination) > MAX_WALK_TO_STOP_METERS) return@mapNotNull null
+                DirectCandidate(route, branch, boardIndex, alightIndex)
+            }
+            .minByOrNull { candidate ->
+                stops[candidate.boardIndex].location.distanceMeters(origin) +
+                    stops[candidate.alightIndex].location.distanceMeters(destination)
+            }
     }
 
     private fun findTransfersFrom(
