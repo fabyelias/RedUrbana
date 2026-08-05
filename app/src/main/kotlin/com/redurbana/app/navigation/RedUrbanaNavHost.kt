@@ -7,12 +7,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.redurbana.app.more.ComingSoonScreen
@@ -23,6 +26,8 @@ import com.redurbana.core.ui.navigation.AppRoute
 import com.redurbana.feature.alerts.AlertsScreen
 import com.redurbana.feature.dashboard.DashboardScreen
 import com.redurbana.feature.lines.LinesScreen
+import com.redurbana.feature.lines.LinesViewModel
+import com.redurbana.feature.lines.TripDetailScreen
 import com.redurbana.feature.map.LiveMapScreen
 import com.redurbana.feature.settings.SettingsScreen
 import com.redurbana.feature.stops.StopsScreen
@@ -41,6 +46,7 @@ fun RedUrbanaNavHost() {
     val selectedItem = when {
         backStackEntry?.destination?.hasRoute(AppRoute.LiveMap::class) == true -> BottomNavItem.MAP
         backStackEntry?.destination?.hasRoute(AppRoute.Lines::class) == true -> BottomNavItem.LINES
+        backStackEntry?.destination?.hasRoute(AppRoute.TripDetail::class) == true -> BottomNavItem.LINES
         backStackEntry?.destination?.hasRoute(AppRoute.More::class) == true -> BottomNavItem.MORE
         backStackEntry?.destination?.hasRoute(AppRoute.Stops::class) == true -> BottomNavItem.MORE
         backStackEntry?.destination?.hasRoute(AppRoute.Favorites::class) == true -> BottomNavItem.MORE
@@ -110,14 +116,40 @@ fun RedUrbanaNavHost() {
                 }
             }
 
-            composable<AppRoute.Lines> {
-                LinesScreen(
-                    onRouteSelected = { routeId ->
-                        navController.navigate(AppRoute.LiveMap(routeId)) {
-                            popUpTo(AppRoute.Lines) { inclusive = true }
-                        }
-                    },
-                )
+            // Lines + TripDetail comparten el mismo LinesViewModel (scoped a
+            // este grafo anidado): TripDetail no vuelve a calcular nada, solo
+            // lee el itinerario ya resuelto por índice.
+            navigation<AppRoute.TripPlanningGraph>(startDestination = AppRoute.Lines) {
+                composable<AppRoute.Lines> { backStackEntry ->
+                    val graphEntry = remember(backStackEntry) { navController.getBackStackEntry(AppRoute.TripPlanningGraph) }
+                    val linesViewModel: LinesViewModel = hiltViewModel(graphEntry)
+                    LinesScreen(
+                        viewModel = linesViewModel,
+                        onItinerarySelected = { index -> navController.navigate(AppRoute.TripDetail(index)) },
+                    )
+                }
+
+                composable<AppRoute.TripDetail> { backStackEntry ->
+                    val graphEntry = remember(backStackEntry) { navController.getBackStackEntry(AppRoute.TripPlanningGraph) }
+                    val linesViewModel: LinesViewModel = hiltViewModel(graphEntry)
+                    val args = backStackEntry.toRoute<AppRoute.TripDetail>()
+                    TripDetailScreen(
+                        viewModel = linesViewModel,
+                        itineraryIndex = args.index,
+                        onStartTrip = { routeId, alightingStop ->
+                            navController.navigate(
+                                AppRoute.LiveMap(
+                                    routeId = routeId,
+                                    alightingLat = alightingStop.location.latitude,
+                                    alightingLng = alightingStop.location.longitude,
+                                    alightingStopName = alightingStop.name,
+                                ),
+                            ) {
+                                popUpTo(AppRoute.TripPlanningGraph) { inclusive = true }
+                            }
+                        },
+                    )
+                }
             }
 
             composable<AppRoute.More> {

@@ -21,6 +21,7 @@ android {
 dependencies {
     implementation(project(":core:core-ui"))
     implementation(project(":core:core-common"))
+    implementation(project(":core:core-location"))
     implementation(project(":domain:domain-transport"))
     implementation(project(":domain:domain-crowdsourcing"))
 
@@ -36,6 +37,9 @@ dependencies {
     implementation(libs.mapbox.compose)
 
     implementation(libs.play.services.location)
+    // NotificationCompat/NotificationManagerCompat para el aviso real de
+    // "bajate en la próxima parada" (TripArrivalNotifier).
+    implementation(libs.core.ktx)
     implementation(libs.hilt.navigation.compose)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)

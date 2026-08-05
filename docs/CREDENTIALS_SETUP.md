@@ -33,6 +33,18 @@ Y completar `mapbox_access_token` con el valor real desde
 https://console.mapbox.com/account/access-tokens/. Si se rota, solo hay que
 reemplazar el valor en ese archivo local.
 
+Además existe una **copia del mismo token** en
+`core/core-common/src/main/res/values/mapbox_token.xml` (mismo motivo:
+push protection, mismo `.gitignore`). La necesita `WalkingDirectionsClient`
+(`data-transport`), que hace una llamada REST directa a la API de Directions
+y no puede leer el recurso de `:app`. Setup:
+
+```bash
+cp core/core-common/mapbox_token.xml.example core/core-common/src/main/res/values/mapbox_token.xml
+```
+
+Completar `mapbox_public_token` con el mismo valor que `mapbox_access_token`.
+
 ## 3. Google Maps API key (legacy)
 
 Si en algún momento se vuelve a Google Maps, la key va en

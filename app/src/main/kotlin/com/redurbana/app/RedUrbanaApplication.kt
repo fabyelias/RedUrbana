@@ -1,6 +1,10 @@
 package com.redurbana.app
 
 import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.os.Build
+import com.redurbana.feature.map.TripArrivalNotifier
 import dagger.hilt.android.HiltAndroidApp
 
 /**
@@ -15,4 +19,23 @@ import dagger.hilt.android.HiltAndroidApp
  * toggle de "Colaborar con la comunidad" en Ajustes.
  */
 @HiltAndroidApp
-class RedUrbanaApplication : Application()
+class RedUrbanaApplication : Application() {
+
+    override fun onCreate() {
+        super.onCreate()
+        createTripArrivalNotificationChannel()
+    }
+
+    /** Un canal solo se puede crear una vez por app — TripArrivalNotifier (feature-map) solo posta a él. */
+    private fun createTripArrivalNotificationChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val channel = NotificationChannel(
+            TripArrivalNotifier.CHANNEL_ID,
+            "Aviso de llegada",
+            NotificationManager.IMPORTANCE_HIGH,
+        ).apply {
+            description = "Avisa cuando estás por llegar a la parada de bajada de tu viaje."
+        }
+        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+    }
+}

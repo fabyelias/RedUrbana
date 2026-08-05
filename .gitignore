@@ -29,6 +29,10 @@ gradle.properties.local
 # (ver docs/CREDENTIALS_SETUP.md sección 2).
 /app/src/main/res/values/mapbox.xml
 
+# Misma copia del token público de Mapbox, pero legible desde data-transport
+# (WalkingDirectionsClient) — ver mapbox_token.xml.example.
+/core/core-common/src/main/res/values/mapbox_token.xml
+
 # Keystore de firma de release: contraseñas + ruta al .jks/.keystore, nunca
 # al repo (el .jks/.keystore en sí ya lo cubren los patrones *.keystore/*.jks
 # de arriba). Ver docs/CREDENTIALS_SETUP.md sección 5.

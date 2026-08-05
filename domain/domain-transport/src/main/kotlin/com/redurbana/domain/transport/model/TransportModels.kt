@@ -34,21 +34,6 @@ data class Stop(
     val routesServed: List<RouteId>,
 )
 
-/**
- * Una línea candidata para ir de un origen a un destino, ordenada por
- * [distanceToOriginMeters]. [stopsToDestination] es nullable porque no todo
- * proveedor conoce las paradas ordenadas de una línea (ver [Branch.stops]).
- */
-data class RouteRecommendation(
-    val routeId: RouteId,
-    val shortName: String,
-    val colorSeed: String,
-    val reliability: ReliabilityScore,
-    val distanceToOriginMeters: Double,
-    val distanceToDestinationMeters: Double,
-    val stopsToDestination: Int?,
-)
-
 data class ArrivalEstimate(
     val routeId: RouteId,
     val stopId: StopId,

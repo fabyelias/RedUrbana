@@ -18,14 +18,32 @@ sealed interface AppRoute {
     /**
      * [routeId] null = se entró sin elegir destino (bottom nav directo): el
      * mapa no dibuja ningún vehículo hasta que se elige una línea vía
-     * [Lines]. No-null = se navegó desde la recomendación de líneas, el
-     * mapa muestra solo esa línea.
+     * [Lines]. No-null = se navegó desde un itinerario elegido, el mapa
+     * muestra solo esa línea.
+     *
+     * [alightingLat]/[alightingLng]/[alightingStopName] son opcionales: solo
+     * vienen completos cuando se llega acá desde "Iniciar viaje" en
+     * [TripDetail] — es lo que le permite al mapa avisar "bajate en la
+     * próxima parada" cuando el usuario se acerca de verdad.
      */
     @Serializable
-    data class LiveMap(val routeId: String? = null) : AppRoute
+    data class LiveMap(
+        val routeId: String? = null,
+        val alightingLat: Double? = null,
+        val alightingLng: Double? = null,
+        val alightingStopName: String? = null,
+    ) : AppRoute
+
+    /** Route del grafo anidado que agrupa [Lines] y [TripDetail] — nunca se muestra directamente. */
+    @Serializable
+    data object TripPlanningGraph : AppRoute
 
     @Serializable
     data object Lines : AppRoute
+
+    /** [index] identifica el itinerario dentro de la lista ya calculada por LinesViewModel (ViewModel compartido a nivel de grafo, no se recalcula nada). */
+    @Serializable
+    data class TripDetail(val index: Int) : AppRoute
 
     @Serializable
     data object More : AppRoute

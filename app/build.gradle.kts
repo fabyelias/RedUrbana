@@ -89,4 +89,8 @@ dependencies {
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
+    // hiltViewModel(NavBackStackEntry) — RedUrbanaNavHost lo usa para
+    // compartir un mismo LinesViewModel entre Lines y TripDetail (grafo
+    // anidado TripPlanningGraph).
+    implementation(libs.hilt.navigation.compose)
 }

@@ -6,8 +6,8 @@ import com.mapbox.geojson.Point
 import com.mapbox.search.result.SearchSuggestion
 import com.redurbana.core.location.DeviceLocationSource
 import com.redurbana.domain.transport.model.GeoPoint
-import com.redurbana.domain.transport.model.RouteRecommendation
-import com.redurbana.domain.transport.usecase.GetRouteRecommendationsUseCase
+import com.redurbana.domain.transport.model.TripItinerary
+import com.redurbana.domain.transport.usecase.GetTripItinerariesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -29,7 +29,7 @@ sealed interface LinesUiState {
 
     data class Recommending(
         val destinationName: String,
-        val recommendations: List<RouteRecommendation>,
+        val itineraries: List<TripItinerary>,
         val isLoading: Boolean = false,
         val error: String? = null,
     ) : LinesUiState
@@ -43,7 +43,7 @@ private const val LOCATION_TIMEOUT_MS = 8_000L
 @HiltViewModel
 class LinesViewModel @Inject constructor(
     private val destinationSearchClient: DestinationSearchClient,
-    private val getRouteRecommendations: GetRouteRecommendationsUseCase,
+    private val getTripItineraries: GetTripItinerariesUseCase,
     private val locationSource: DeviceLocationSource,
 ) : ViewModel() {
 
@@ -100,27 +100,27 @@ class LinesViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = LinesUiState.Recommending(
                 destinationName = suggestion.name,
-                recommendations = emptyList(),
+                itineraries = emptyList(),
                 isLoading = true,
             )
             destinationSearchClient.resolve(suggestion)
                 .mapCatching { result ->
                     val destination = GeoPoint(result.coordinate.latitude(), result.coordinate.longitude())
-                    getRouteRecommendations(currentOrigin(), destination).getOrThrow()
+                    getTripItineraries(currentOrigin(), destination).getOrThrow()
                 }
-                .onSuccess { recommendations ->
+                .onSuccess { itineraries ->
                     _uiState.value = LinesUiState.Recommending(
                         destinationName = suggestion.name,
-                        recommendations = recommendations,
+                        itineraries = itineraries,
                         isLoading = false,
                     )
                 }
                 .onFailure {
                     _uiState.value = LinesUiState.Recommending(
                         destinationName = suggestion.name,
-                        recommendations = emptyList(),
+                        itineraries = emptyList(),
                         isLoading = false,
-                        error = "No pudimos calcular líneas recomendadas para ese destino.",
+                        error = "No pudimos calcular alternativas para ese destino.",
                     )
                 }
         }

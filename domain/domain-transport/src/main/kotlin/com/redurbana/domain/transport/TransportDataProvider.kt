@@ -6,10 +6,10 @@ import com.redurbana.domain.transport.model.ProviderCapabilities
 import com.redurbana.domain.transport.model.ReliabilityScore
 import com.redurbana.domain.transport.model.RouteDetails
 import com.redurbana.domain.transport.model.RouteId
-import com.redurbana.domain.transport.model.RouteRecommendation
 import com.redurbana.domain.transport.model.ServiceAlert
 import com.redurbana.domain.transport.model.Stop
 import com.redurbana.domain.transport.model.StopId
+import com.redurbana.domain.transport.model.TripItinerary
 import com.redurbana.domain.transport.model.VehiclePosition
 import kotlinx.coroutines.flow.Flow
 
@@ -55,11 +55,14 @@ interface TransportDataProvider {
     suspend fun getStopsNearby(location: GeoPoint, radiusMeters: Int): Result<List<Stop>>
 
     /**
-     * Líneas candidatas para ir de [origin] a [destination], ordenadas por
-     * cercanía a [origin]. Sobre datos sintéticos esto es una aproximación
-     * geométrica razonable, no un cálculo de recorrido real por calles.
+     * Alternativas puerta a puerta para ir de [origin] a [destination],
+     * ordenadas por tiempo total estimado — directas o con hasta 1
+     * transbordo. Los tramos de caminata usan direcciones reales; los
+     * tramos en colectivo estiman su duración a partir de la geometría real
+     * del ramal y la velocidad simulada del vehículo, nunca un horario
+     * inventado.
      */
-    suspend fun getRouteRecommendations(origin: GeoPoint, destination: GeoPoint): Result<List<RouteRecommendation>>
+    suspend fun getTripItineraries(origin: GeoPoint, destination: GeoPoint): Result<List<TripItinerary>>
 
     suspend fun getArrivalEstimates(stopId: StopId): Result<List<ArrivalEstimate>>
 

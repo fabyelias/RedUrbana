@@ -11,7 +11,7 @@ import com.redurbana.domain.transport.model.distanceMeters
  * cada [stepMeters] por interpolación lineal entre waypoints. Ninguna fuente
  * mock tenía hasta ahora el concepto de "paradas en orden a lo largo de una
  * línea" (solo [Branch.path], la polilínea) — esto es lo que le permite a
- * getRouteRecommendations calcular una distancia en paradas hasta destino.
+ * TripPlanner calcular boarding/alighting stop y distancia en paradas.
  */
 internal object StopGenerator {
 

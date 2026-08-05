@@ -9,10 +9,10 @@ import com.redurbana.domain.transport.model.ProviderCapabilities
 import com.redurbana.domain.transport.model.ReliabilityScore
 import com.redurbana.domain.transport.model.RouteDetails
 import com.redurbana.domain.transport.model.RouteId
-import com.redurbana.domain.transport.model.RouteRecommendation
 import com.redurbana.domain.transport.model.ServiceAlert
 import com.redurbana.domain.transport.model.Stop
 import com.redurbana.domain.transport.model.StopId
+import com.redurbana.domain.transport.model.TripItinerary
 import com.redurbana.domain.transport.model.VehicleId
 import com.redurbana.domain.transport.model.VehiclePosition
 import com.redurbana.domain.transport.model.distanceMeters
@@ -24,6 +24,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.shareIn
@@ -57,12 +58,13 @@ import kotlin.random.Random
 @Singleton
 class MockTransportProvider @Inject constructor(
     private val realRouteData: RealRouteData,
+    private val tripPlanner: TripPlanner,
 ) : TransportDataProvider {
 
     companion object {
         private const val TICK_INTERVAL_MS = 2_000L // GTFS-RT real suele actualizar cada 10-30s; acá va más rápido a propósito, para poder ver el movimiento en la demo
         private const val GRID_CELL_SIZE_DEGREES = 0.01 // ~1.1km — suficiente para viewports típicos de un celular
-        private const val MAX_ORIGIN_DISTANCE_METERS = 2_000.0 // qué tan lejos de la ubicación real del usuario puede pasar una línea para seguir siendo "recomendable"
+        private const val STOP_GRID_CELL_SIZE_DEGREES = 0.002 // ~220m — más fino que el de vehículos, para detectar transbordos a pie
     }
 
     override val providerId: String = "mock-argentina-real-routes"
@@ -81,6 +83,14 @@ class MockTransportProvider @Inject constructor(
 
     private val allStops: Deferred<List<Stop>> = providerScope.async {
         loadedFleet.await().routes.values.flatMap { route -> route.branches.flatMap { it.stops } }
+    }
+
+    // Índice espacial de paradas, para detectar candidatos de transbordo
+    // (paradas de OTRAS líneas a poca distancia a pie) sin recorrer las
+    // ~30 mil paradas reales en cada búsqueda de itinerario.
+    private val stopIndex: Deferred<SpatialGrid<Stop>> = providerScope.async {
+        SpatialGrid<Stop>(locationOf = { it.location }, cellSizeDegrees = STOP_GRID_CELL_SIZE_DEGREES)
+            .apply { rebuild(allStops.await()) }
     }
 
     private data class FleetSnapshot(
@@ -136,45 +146,16 @@ class MockTransportProvider @Inject constructor(
         return Result.success(nearby)
     }
 
-    override suspend fun getRouteRecommendations(origin: GeoPoint, destination: GeoPoint): Result<List<RouteRecommendation>> {
-        val routes = loadedFleet.await().routes.values
-        val recommendations = routes.mapNotNull { route ->
-            // Una línea real puede tener varios ramales sirviendo zonas
-            // distintas (ej. la 60 tiene 8, entre La Boca y Tigre): hay que
-            // mirar el más cercano al origen, no asumir que el primero
-            // alcanza para decidir si la línea le sirve al usuario.
-            val nearestBranch = route.branches
-                .mapNotNull { branch ->
-                    val points = branch.stops.map { it.location }.ifEmpty { branch.path }
-                    if (points.isEmpty()) return@mapNotNull null
-                    branch to points.minOf { it.distanceMeters(origin) }
-                }
-                .minByOrNull { (_, distance) -> distance }
-                ?: return@mapNotNull null
-
-            val (branch, distanceToOrigin) = nearestBranch
-            if (distanceToOrigin > MAX_ORIGIN_DISTANCE_METERS) return@mapNotNull null
-
-            val referencePoints = branch.stops.map { it.location }.ifEmpty { branch.path }
-            val distanceToDestination = referencePoints.minOf { it.distanceMeters(destination) }
-
-            val stopsToDestination = branch.stops.takeIf { it.isNotEmpty() }?.let { stops ->
-                val originIndex = stops.indices.minByOrNull { stops[it].location.distanceMeters(origin) }
-                val destinationIndex = stops.indices.minByOrNull { stops[it].location.distanceMeters(destination) }
-                if (originIndex != null && destinationIndex != null) kotlin.math.abs(destinationIndex - originIndex) else null
-            }
-
-            RouteRecommendation(
-                routeId = route.routeId,
-                shortName = route.shortName,
-                colorSeed = route.colorSeed,
-                reliability = route.reliability,
-                distanceToOriginMeters = distanceToOrigin,
-                distanceToDestinationMeters = distanceToDestination,
-                stopsToDestination = stopsToDestination,
-            )
-        }.sortedBy { it.distanceToOriginMeters }
-        return Result.success(recommendations)
+    override suspend fun getTripItineraries(origin: GeoPoint, destination: GeoPoint): Result<List<TripItinerary>> = runCatching {
+        val fleet = loadedFleet.await()
+        val currentPositions = fleetSnapshots.first().positions
+        tripPlanner.plan(
+            origin = origin,
+            destination = destination,
+            routes = fleet.routes,
+            stopIndex = stopIndex.await(),
+            currentPositions = currentPositions,
+        )
     }
 
     override suspend fun getArrivalEstimates(stopId: StopId): Result<List<ArrivalEstimate>> {

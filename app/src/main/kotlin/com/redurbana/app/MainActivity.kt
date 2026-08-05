@@ -3,6 +3,7 @@ package com.redurbana.app
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -51,12 +52,14 @@ class MainActivity : ComponentActivity() {
 }
 
 /**
- * Pide ACCESS_FINE_LOCATION + ACCESS_COARSE_LOCATION una única vez en toda
- * la vida de la instalación (el flag en SharedPreferences se guarda apenas
- * se dispara el pedido, sin importar si el usuario lo acepta o lo rechaza).
- * No bloquea el uso de la app: sin el permiso, el opt-in de "Colaborar con
- * la comunidad" en Ajustes simplemente no va a poder activarse — el resto
- * de la app funciona igual.
+ * Pide ACCESS_FINE_LOCATION + ACCESS_COARSE_LOCATION + (API 33+)
+ * POST_NOTIFICATIONS una única vez en toda la vida de la instalación (el
+ * flag en SharedPreferences se guarda apenas se dispara el pedido, sin
+ * importar si el usuario acepta o rechaza). No bloquea el uso de la app:
+ * sin el permiso de ubicación, el opt-in de "Colaborar con la comunidad" en
+ * Ajustes simplemente no va a poder activarse; sin el de notificaciones,
+ * el aviso de "bajate en la próxima parada" (TripArrivalNotifier) no se
+ * muestra — el resto de la app funciona igual.
  */
 @Composable
 private fun RequestLocationPermissionOnce() {
@@ -74,9 +77,14 @@ private fun RequestLocationPermissionOnce() {
         ) == PackageManager.PERMISSION_GRANTED
         if (!alreadyAsked && !alreadyGranted) {
             prefs.edit().putBoolean(KEY_LOCATION_PERMISSION_ASKED, true).apply()
-            launcher.launch(
-                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
-            )
+            val permissions = buildList {
+                add(Manifest.permission.ACCESS_FINE_LOCATION)
+                add(Manifest.permission.ACCESS_COARSE_LOCATION)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    add(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
+            launcher.launch(permissions.toTypedArray())
         }
     }
 }

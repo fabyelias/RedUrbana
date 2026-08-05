@@ -37,6 +37,12 @@ dependencies {
     implementation(libs.mapbox.search)
     implementation(libs.kotlinx.coroutines.core)
 
+    // Mini-mapa estático del detalle de itinerario (TripPreviewMap): cámara
+    // fija, sin flota simulada — no es LiveMapScreen, así que no hace falta
+    // ninguna dependencia además de las del SDK de mapas en sí.
+    implementation(libs.mapbox.maps)
+    implementation(libs.mapbox.compose)
+
     testImplementation(libs.junit)
     testImplementation(libs.turbine)
 }

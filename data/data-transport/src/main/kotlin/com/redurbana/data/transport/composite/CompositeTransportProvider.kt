@@ -8,10 +8,10 @@ import com.redurbana.domain.transport.model.ProviderCapabilities
 import com.redurbana.domain.transport.model.ReliabilityScore
 import com.redurbana.domain.transport.model.RouteDetails
 import com.redurbana.domain.transport.model.RouteId
-import com.redurbana.domain.transport.model.RouteRecommendation
 import com.redurbana.domain.transport.model.ServiceAlert
 import com.redurbana.domain.transport.model.Stop
 import com.redurbana.domain.transport.model.StopId
+import com.redurbana.domain.transport.model.TripItinerary
 import com.redurbana.domain.transport.model.VehicleId
 import com.redurbana.domain.transport.model.VehiclePosition
 import kotlinx.coroutines.flow.Flow
@@ -74,8 +74,8 @@ class CompositeTransportProvider(
     override suspend fun getStopsNearby(location: GeoPoint, radiusMeters: Int): Result<List<Stop>> =
         providerFor { it.supportsRealtimePositions }.getStopsNearby(location, radiusMeters)
 
-    override suspend fun getRouteRecommendations(origin: GeoPoint, destination: GeoPoint): Result<List<RouteRecommendation>> =
-        providerFor { it.supportsRealtimePositions }.getRouteRecommendations(origin, destination)
+    override suspend fun getTripItineraries(origin: GeoPoint, destination: GeoPoint): Result<List<TripItinerary>> =
+        providerFor { it.supportsRealtimePositions }.getTripItineraries(origin, destination)
 
     override suspend fun getArrivalEstimates(stopId: StopId): Result<List<ArrivalEstimate>> =
         providerFor { it.supportsArrivalEstimates }.getArrivalEstimates(stopId)
