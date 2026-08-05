@@ -7,11 +7,11 @@ sección 4 sobre por qué eso es seguro).
 ## Cómo aplicar el schema
 
 1. Dashboard de Supabase → **SQL Editor**.
-2. Pegar el contenido de `migrations/0001_init_schema.sql`.
-3. **Run.**
+2. Pegar el contenido de `migrations/0001_init_schema.sql`. **Run.**
+3. Pegar el contenido de `migrations/0002_crowd_aggregation.sql`. **Run.**
 
-Es idempotente: se puede volver a correr sin romper nada si ya se aplicó
-antes (usa `create ... if not exists` y `drop policy if exists`).
+Los dos son idempotentes: se pueden volver a correr sin romper nada si ya
+se aplicaron antes (usan `create ... if not exists` / `drop ... if exists`).
 
 Si en algún momento se prefiere usar Supabase CLI en vez de pegar el SQL a
 mano (`supabase link` + `supabase db push`), este mismo archivo ya sigue la
@@ -27,13 +27,19 @@ convención de carpetas que espera el CLI (`supabase/migrations/`).
 | `crowd_pings` | Pings anónimos de ubicación (docs/ARQUITECTURA.md §14) | solo `service_role` | cualquiera (anon + authenticated), insert-only |
 | `vehicle_group_estimates` | Estimaciones agregadas por vehículo (`CrowdSourcingRepository.observeGroupEstimates`) | público (anon + authenticated) | solo `service_role` |
 
+## Backend de agregación (0002)
+
+`aggregate_vehicle_group_estimates()` corre sola cada 1 minuto vía
+`pg_cron`: agrupa los `crowd_pings` de los últimos 2 minutos por línea,
+promedia posición/rumbo/velocidad, y reescribe `vehicle_group_estimates`.
+Limitación conocida (documentada en el archivo): no distingue vehículo/ramal
+dentro de una misma línea — con dos colectivos reportando a la vez en la
+misma línea, el promedio no representa a ninguno de los dos con precisión.
+Aceptable mientras la adopción sea baja; si crece, hace falta clustering
+espacial en vez de un promedio simple.
+
 ## Deliberadamente fuera de este cambio
 
-- **El backend de agregación** que lee `crowd_pings` y calcula
-  `vehicle_group_estimates` (triangulación real). Documentado en
-  `docs/ARQUITECTURA.md` §14 como "fuera del alcance de este repo Android" —
-  hoy las tablas y políticas están listas para que ese backend (Edge
-  Function, cron job, o servicio aparte) exista, pero no se escribió acá.
 - **El cliente Kotlin** (agregar `supabase-kt` como dependencia, implementar
   `LocalCrowdSourcingRepository` → uno real, wiring en `CrowdSourcingModule`,
   pantallas de login). Este cambio es solo el schema + políticas de la base;
