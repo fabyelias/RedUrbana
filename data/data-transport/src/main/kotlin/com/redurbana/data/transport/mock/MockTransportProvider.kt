@@ -34,14 +34,14 @@ import kotlin.random.Random
 
 /**
  * Implementación de [TransportDataProvider] sobre datos reales de geometría
- * de líneas (ver [RealRouteData]): 138 líneas / 566 ramales reales del área
+ * de líneas (ver [RealRouteData]): 275 líneas / 1024 ramales reales del área
  * metropolitana de Buenos Aires, con un vehículo simulado moviéndose sobre
  * cada ramal — la posición del vehículo es simulada, pero el recorrido que
  * sigue es el real.
  *
  * Dos decisiones de diseño para que esto escale de verdad:
  *
- * 1. CARGA ASÍNCRONA EN BACKGROUND: parsear ~7.5MB de JSON y generar ~566
+ * 1. CARGA ASÍNCRONA EN BACKGROUND: parsear ~12.8MB de JSON y generar ~1024
  *    vehículos no puede pasar en el hilo que construye este singleton
  *    (típicamente el hilo principal, vía Hilt, al crear el primer
  *    ViewModel que lo necesita). [loadedFleet] arranca la carga apenas se

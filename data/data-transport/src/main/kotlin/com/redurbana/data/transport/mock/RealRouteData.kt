@@ -26,18 +26,24 @@ private data class RealBranchDto(val id: String, val name: String, val path: Lis
 private data class RealRouteDto(val routeId: String, val shortName: String, val company: String, val branches: List<RealBranchDto>)
 
 /**
- * Carga `assets/real_routes.json`: geometría real de las 138 líneas de
- * colectivo de jurisdicción nacional (CNRT) del área metropolitana de Buenos
- * Aires, 566 ramales en total (fuente: datos.transporte.gob.ar, dataset KML
- * "Líneas jurisdicción nacional RMBA-CNRT"). Reemplaza a
- * `SyntheticFleetGenerator`: qué línea le sirve a un usuario para llegar a
- * destino se calcula ahora sobre el trazado real de cada ramal, no sobre un
- * radio ficticio alrededor de un centro fijo — así funciona igual esté el
- * usuario en Congreso o en Tigre.
+ * Carga `assets/real_routes.json`: geometría real de 275 líneas de colectivo
+ * de jurisdicción nacional (CNRT) del área metropolitana de Buenos Aires,
+ * 1024 ramales en total. Dos fuentes combinadas, ambas CNRT: 138 líneas
+ * (566 ramales) de datos.transporte.gob.ar ("Líneas jurisdicción nacional
+ * RMBA-CNRT"), más 137 líneas (458 ramales) que faltaban ahí, extraídas del
+ * GTFS de la Ciudad de 2019 (`shapes.txt`, ver ExpectedFrequencyData para el
+ * mismo GTFS usado para frecuencias). Reemplaza a `SyntheticFleetGenerator`:
+ * qué línea le sirve a un usuario para llegar a destino se calcula ahora
+ * sobre el trazado real de cada ramal, no sobre un radio ficticio alrededor
+ * de un centro fijo — así funciona igual esté el usuario en Congreso o en
+ * Tigre.
  *
- * Es solo geometría: no hay (todavía) horarios/frecuencias reales (GTFS
- * completo), así que la confiabilidad se deja en un valor neutral fijo en
- * vez de inventar variación que no tenemos forma de sustentar.
+ * Es solo geometría: la posición de cada vehículo sigue siendo simulada
+ * (no hay GPS real todavía, ver docs/ARQUITECTURA.md #14), así que la
+ * confiabilidad se deja en un valor neutral fijo en vez de inventar
+ * variación que no tenemos forma de sustentar. La frecuencia esperada por
+ * línea SÍ es real (ver ExpectedFrequencyData) — son datasets distintos que
+ * responden preguntas distintas ("por dónde pasa" vs. "cada cuánto pasa").
  */
 @Singleton
 class RealRouteData @Inject constructor(
@@ -84,7 +90,7 @@ class RealRouteData @Inject constructor(
 
             // Un vehículo simulado por ramal real: suficiente para que cada
             // línea tenga movimiento visible sin triplicar el costo de
-            // simulación (566 ramales ya son 566 vehículos por sí solos).
+            // simulación (1024 ramales ya son 1024 vehículos por sí solos).
             branches.forEach { branch ->
                 vehicles += SimulatedVehicle(
                     vehicleId = VehicleId("${routeId.value}-${branch.id}"),

@@ -24,9 +24,11 @@ private data class RouteFrequencyDto(val routeId: String, val schedule: List<Day
  * Frecuencia esperada por línea (cada cuánto pasa normalmente), sacada de un
  * GTFS oficial de la Ciudad (frequencies.txt, jurisdicción CNRT) de 2019 —
  * es lo más nuevo públicamente disponible: la API en tiempo real de la
- * Ciudad está suspendida desde julio 2026. Cubre 136 de las 138 líneas de
+ * Ciudad está suspendida desde julio 2026. Cubre 273 de las 275 líneas de
  * real_routes.json (match por número de línea, no por routeId interno del
- * GTFS — cada ramal del GTFS original es una "línea" separada ahí).
+ * GTFS — cada ramal del GTFS original es una "línea" separada ahí). Mismo
+ * GTFS que se usó para agregar las 137 líneas que le faltaban a
+ * `RealRouteData` (ver ese archivo).
  *
  * A propósito NO se usa para calcular "a horario / demorado": eso implicaría
  * comparar contra la posición de un vehículo SIMULADO, no real, lo que daría
