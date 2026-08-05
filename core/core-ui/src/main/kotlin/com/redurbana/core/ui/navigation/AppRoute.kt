@@ -12,38 +12,38 @@ import kotlinx.serialization.Serializable
  */
 sealed interface AppRoute {
 
+    /**
+     * Pantalla de inicio de toda la app: mapa persistente donde se elige el
+     * destino tocando el mapa (reemplaza a la vieja Dashboard y a la
+     * búsqueda por texto). Ver `feature-lines/ExploreMapScreen`.
+     */
     @Serializable
-    data object Dashboard : AppRoute
+    data object Explore : AppRoute
 
     /**
      * [routeId] null = se entró sin elegir destino (bottom nav directo): el
-     * mapa no dibuja ningún vehículo hasta que se elige una línea vía
-     * [Lines]. No-null = se navegó desde un itinerario elegido, el mapa
+     * mapa no dibuja ningún vehículo hasta que se elige una línea desde
+     * [Explore]. No-null = se navegó desde un itinerario elegido, el mapa
      * muestra solo esa línea.
      *
      * [alightingLat]/[alightingLng]/[alightingStopName] son opcionales: solo
-     * vienen completos cuando se llega acá desde "Iniciar viaje" en
-     * [TripDetail] — es lo que le permite al mapa avisar "bajate en la
-     * próxima parada" cuando el usuario se acerca de verdad.
+     * vienen completos cuando se llega acá desde "Iniciar viaje" — es lo que
+     * le permite al mapa avisar "bajate en la próxima parada" cuando el
+     * usuario se acerca de verdad.
+     *
+     * [alightingLat]/[alightingLng] son String (no Double): Navigation
+     * Compose serializa rutas tipadas solo con String/Int/Float/Long/Boolean
+     * (y sus versiones nullable) — Double no tiene un NavType propio y
+     * crashea en runtime con "Cannot cast ... to a NavType". Se parsean con
+     * toDoubleOrNull() del lado de quien los lee (LiveMapViewModel).
      */
     @Serializable
     data class LiveMap(
         val routeId: String? = null,
-        val alightingLat: Double? = null,
-        val alightingLng: Double? = null,
+        val alightingLat: String? = null,
+        val alightingLng: String? = null,
         val alightingStopName: String? = null,
     ) : AppRoute
-
-    /** Route del grafo anidado que agrupa [Lines] y [TripDetail] — nunca se muestra directamente. */
-    @Serializable
-    data object TripPlanningGraph : AppRoute
-
-    @Serializable
-    data object Lines : AppRoute
-
-    /** [index] identifica el itinerario dentro de la lista ya calculada por LinesViewModel (ViewModel compartido a nivel de grafo, no se recalcula nada). */
-    @Serializable
-    data class TripDetail(val index: Int) : AppRoute
 
     @Serializable
     data object More : AppRoute

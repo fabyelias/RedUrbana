@@ -19,6 +19,7 @@ import com.mapbox.maps.MapboxMap
 import com.redurbana.core.ui.theme.LineColorProvider
 import com.redurbana.core.ui.theme.RedUrbanaColors
 import com.redurbana.core.ui.theme.VehicleConfidenceStyle
+import com.redurbana.domain.transport.model.GeoPoint
 import com.redurbana.feature.map.cluster.MapRenderItem
 import kotlin.math.hypot
 
@@ -48,6 +49,7 @@ fun VehicleCanvasOverlay(
     selectedVehicleId: String?,
     onVehicleTap: (vehicleId: String) -> Unit,
     modifier: Modifier = Modifier,
+    userLocation: GeoPoint? = null,
 ) {
     val textPaint = remember {
         Paint().apply {
@@ -78,6 +80,8 @@ fun VehicleCanvasOverlay(
     ) {
         val map = mapboxMap ?: return@Canvas
 
+        userLocation?.let { drawUserLocationDot(map, it) }
+
         for (item in items) {
             when (item) {
                 is MapRenderItem.Single -> {
@@ -88,6 +92,15 @@ fun VehicleCanvasOverlay(
             }
         }
     }
+}
+
+/** Punto azul estilo Google Maps — "estás acá", en vivo. Mismo estilo que ExploreMapScreen para que se reconozca. */
+private fun DrawScope.drawUserLocationDot(map: MapboxMap, point: GeoPoint) {
+    val screen = map.pixelForCoordinate(Point.fromLngLat(point.longitude, point.latitude))
+    val center = Offset(screen.x.toFloat(), screen.y.toFloat())
+    drawCircle(color = RedUrbanaColors.AccentBlue.copy(alpha = 0.18f), radius = 26f, center = center)
+    drawCircle(color = RedUrbanaColors.AccentBlue, radius = 11f, center = center)
+    drawCircle(color = androidx.compose.ui.graphics.Color.White, radius = 11f, center = center, style = Stroke(width = 3f))
 }
 
 private fun DrawScope.drawVehicleDot(

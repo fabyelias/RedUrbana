@@ -28,6 +28,11 @@ import com.mapbox.maps.extension.compose.style.BooleanValue
 import com.mapbox.maps.extension.compose.style.standard.LightPresetValue
 import com.mapbox.maps.extension.compose.style.standard.MapboxStandardStyle
 import com.mapbox.maps.extension.compose.style.standard.rememberStandardStyleState
+import com.mapbox.maps.extension.style.expressions.generated.Expression
+import com.mapbox.maps.extension.style.layers.addLayer
+import com.mapbox.maps.extension.style.layers.generated.lineLayer
+import com.mapbox.maps.extension.style.sources.addSource
+import com.mapbox.maps.extension.style.sources.generated.vectorSource
 import com.mapbox.maps.plugin.animation.MapAnimationOptions
 import com.redurbana.core.ui.components.GlassCard
 import com.redurbana.core.ui.components.LiveBadge
@@ -133,6 +138,7 @@ fun LiveMapScreen(
                     nativeMap = mapView.mapboxMap
                     currentZoom = mapView.mapboxMap.cameraState.zoom.toFloat()
                 }
+                mapView.mapboxMap.subscribeStyleLoaded { addTrafficLayer(mapView.mapboxMap) }
             }
 
             // Único ViewAnnotation "pesado": el vehículo seleccionado/seguido.
@@ -161,6 +167,7 @@ fun LiveMapScreen(
                 }
             },
             modifier = Modifier.fillMaxSize(),
+            userLocation = (uiState as? MapUiState.Success)?.userLocation,
         )
 
         LiveBadge(
@@ -192,6 +199,39 @@ fun LiveMapScreen(
             }
         }
     }
+}
+
+private const val TRAFFIC_SOURCE_ID = "redurbana-traffic"
+private const val TRAFFIC_LAYER_ID = "redurbana-traffic-layer"
+
+/**
+ * Capa de tráfico REAL de Mapbox (congestión en vivo, no inventada) — mismo
+ * tileset que usa Google Maps/Waze por debajo (`mapbox.mapbox-traffic-v1`).
+ * Se agrega vía la API de estilos en vez de cambiar a un style "traffic-*"
+ * completo, para no perder los edificios 3D / preset nocturno del Standard
+ * style ya elegido. `slot("middle")` la ubica en la posición correcta
+ * respecto a las calles del style Standard (API de slots de v11).
+ */
+private fun addTrafficLayer(map: MapboxMap) {
+    if (map.styleSourceExists(TRAFFIC_SOURCE_ID)) return
+    map.addSource(vectorSource(TRAFFIC_SOURCE_ID) { url("mapbox://mapbox.mapbox-traffic-v1") })
+    map.addLayer(
+        lineLayer(TRAFFIC_LAYER_ID, TRAFFIC_SOURCE_ID) {
+            sourceLayer("traffic")
+            lineWidth(2.5)
+            lineColor(
+                Expression.match(
+                    Expression.get("congestion"),
+                    Expression.literal("low"), Expression.color(android.graphics.Color.parseColor("#4CAF50")),
+                    Expression.literal("moderate"), Expression.color(android.graphics.Color.parseColor("#FFC107")),
+                    Expression.literal("heavy"), Expression.color(android.graphics.Color.parseColor("#FF5722")),
+                    Expression.literal("severe"), Expression.color(android.graphics.Color.parseColor("#B71C1C")),
+                    Expression.color(android.graphics.Color.TRANSPARENT),
+                ),
+            )
+            slot("middle")
+        },
+    )
 }
 
 /**
