@@ -1,0 +1,93 @@
+package com.redurbana.data.transport.directions
+
+import android.content.Context
+import com.redurbana.domain.transport.DirectionsProvider
+import com.redurbana.domain.transport.model.DrivingRoute
+import com.redurbana.domain.transport.model.GeoPoint
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import java.net.HttpURLConnection
+import java.net.URL
+import javax.inject.Inject
+import javax.inject.Singleton
+import kotlin.math.roundToInt
+
+enum class DirectionsProfile(val pathSegment: String) {
+    WALKING("walking"),
+    DRIVING("driving"),
+}
+
+data class MapboxRoute(
+    val distanceMeters: Double,
+    val durationMinutes: Int,
+    val polyline: List<GeoPoint>,
+)
+
+@Serializable
+private data class DirectionsResponseDto(val routes: List<DirectionsRouteDto> = emptyList())
+
+@Serializable
+private data class DirectionsRouteDto(val distance: Double, val duration: Double, val geometry: DirectionsGeometryDto)
+
+@Serializable
+private data class DirectionsGeometryDto(val coordinates: List<List<Double>>)
+
+/**
+ * Ruta real (sigue calles, no línea recta) vía la API REST de Mapbox
+ * Directions, con una llamada directa por [HttpURLConnection] en vez del SDK
+ * nativo de Directions: esta sesión ya perdió horas por desajustes de
+ * versión entre componentes nativos de Mapbox (Search SDK vs Maps SDK, ver
+ * `mapboxSearch` en gradle/libs.versions.toml) — una llamada REST plana con
+ * el mismo token público no tiene ese riesgo ni suma otra dependencia nativa.
+ *
+ * Implementa [DirectionsProvider] (perfil auto, para el modo "Auto" de
+ * ExploreMapScreen) Y sigue siendo el cliente de bajo nivel que TripPlanner
+ * usa directo para caminata — TripPlanner vive en data-transport, no cruza
+ * la frontera de dominio que sí importa para una feature como feature-lines.
+ */
+@Singleton
+class DirectionsClient @Inject constructor(
+    @ApplicationContext private val context: Context,
+) : DirectionsProvider {
+    private val json = Json { ignoreUnknownKeys = true }
+
+    suspend fun route(from: GeoPoint, to: GeoPoint, profile: DirectionsProfile = DirectionsProfile.WALKING): Result<MapboxRoute> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val token = context.getString(com.redurbana.core.common.R.string.mapbox_public_token)
+                val coordinates = "${from.longitude},${from.latitude};${to.longitude},${to.latitude}"
+                val url = URL(
+                    "https://api.mapbox.com/directions/v5/mapbox/${profile.pathSegment}/$coordinates" +
+                        "?geometries=geojson&overview=full&access_token=$token",
+                )
+                val connection = url.openConnection() as HttpURLConnection
+                connection.requestMethod = "GET"
+                connection.connectTimeout = 8_000
+                connection.readTimeout = 8_000
+                val body = try {
+                    if (connection.responseCode !in 200..299) {
+                        error("Directions API respondió ${connection.responseCode}")
+                    }
+                    connection.inputStream.bufferedReader().use { it.readText() }
+                } finally {
+                    connection.disconnect()
+                }
+
+                val route = json.decodeFromString<DirectionsResponseDto>(body).routes.firstOrNull()
+                    ?: throw NoSuchElementException("Sin ruta entre esos puntos (perfil ${profile.pathSegment})")
+                MapboxRoute(
+                    distanceMeters = route.distance,
+                    durationMinutes = (route.duration / 60.0).roundToInt().coerceAtLeast(1),
+                    polyline = route.geometry.coordinates.map { GeoPoint(latitude = it[1], longitude = it[0]) },
+                )
+            }
+        }
+
+    override suspend fun getDrivingRoute(origin: GeoPoint, destination: GeoPoint): Result<DrivingRoute> =
+        route(origin, destination, DirectionsProfile.DRIVING).map {
+            DrivingRoute(distanceMeters = it.distanceMeters, durationMinutes = it.durationMinutes, polyline = it.polyline)
+        }
+}

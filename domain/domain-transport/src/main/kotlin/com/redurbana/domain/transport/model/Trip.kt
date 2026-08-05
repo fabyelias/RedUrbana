@@ -50,3 +50,10 @@ data class TripItinerary(
     val totalMinutes: Int,
     val transferCount: Int,
 )
+
+/** Ruta real en auto entre dos puntos (sigue calles, no línea recta) — ver [com.redurbana.domain.transport.DirectionsProvider]. */
+data class DrivingRoute(
+    val distanceMeters: Double,
+    val durationMinutes: Int,
+    val polyline: List<GeoPoint>,
+)

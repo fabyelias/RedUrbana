@@ -1,6 +1,8 @@
 package com.redurbana.data.transport.di
 
+import com.redurbana.data.transport.directions.DirectionsClient
 import com.redurbana.data.transport.mock.MockTransportProvider
+import com.redurbana.domain.transport.DirectionsProvider
 import com.redurbana.domain.transport.TransportDataProvider
 import dagger.Binds
 import dagger.Module
@@ -33,4 +35,9 @@ abstract class TransportModule {
     abstract fun bindTransportDataProvider(
         impl: MockTransportProvider,
     ): TransportDataProvider
+
+    @Binds
+    abstract fun bindDirectionsProvider(
+        impl: DirectionsClient,
+    ): DirectionsProvider
 }

@@ -1,7 +1,9 @@
 package com.redurbana.domain.transport.usecase
 
+import com.redurbana.domain.transport.DirectionsProvider
 import com.redurbana.domain.transport.GeoBounds
 import com.redurbana.domain.transport.TransportDataProvider
+import com.redurbana.domain.transport.model.DrivingRoute
 import com.redurbana.domain.transport.model.ArrivalEstimate
 import com.redurbana.domain.transport.model.GeoPoint
 import com.redurbana.domain.transport.model.RouteId
@@ -76,4 +78,12 @@ class GetRouteDetailsUseCase @Inject constructor(
 ) {
     suspend operator fun invoke(routeId: RouteId): Result<com.redurbana.domain.transport.model.RouteDetails> =
         provider.getRouteDetails(routeId)
+}
+
+/** Modo "Auto" de ExploreMapScreen: ruta real manejando, no transporte público. */
+class GetDrivingRouteUseCase @Inject constructor(
+    private val provider: DirectionsProvider,
+) {
+    suspend operator fun invoke(origin: GeoPoint, destination: GeoPoint): Result<DrivingRoute> =
+        provider.getDrivingRoute(origin, destination)
 }

@@ -1,6 +1,6 @@
 package com.redurbana.data.transport.mock
 
-import com.redurbana.data.transport.directions.WalkingDirectionsClient
+import com.redurbana.data.transport.directions.DirectionsClient
 import com.redurbana.data.transport.spatial.SpatialGrid
 import com.redurbana.domain.transport.GeoBounds
 import com.redurbana.domain.transport.model.Branch
@@ -28,7 +28,7 @@ import kotlin.math.roundToInt
  * típico de 0-1 transbordos.
  *
  * Todas las estimaciones salen de datos que la app realmente tiene: la
- * caminata usa [WalkingDirectionsClient] (real, sigue calles); el tiempo en
+ * caminata usa [DirectionsClient] (real, sigue calles); el tiempo en
  * el colectivo sale de la distancia real a lo largo del ramal sobre la
  * velocidad del vehículo simulado de ESE ramal; "sale en X min" sale de la
  * distancia real entre la posición simulada actual del vehículo y la parada
@@ -36,7 +36,7 @@ import kotlin.math.roundToInt
  */
 @Singleton
 class TripPlanner @Inject constructor(
-    private val walkingDirectionsClient: WalkingDirectionsClient,
+    private val directionsClient: DirectionsClient,
     private val expectedFrequencyData: ExpectedFrequencyData,
 ) {
     private companion object {
@@ -182,8 +182,8 @@ class TripPlanner @Inject constructor(
     ): TripItinerary? = coroutineScope {
         val boardStop = candidate.branch.stops[candidate.boardIndex]
         val alightStop = candidate.branch.stops[candidate.alightIndex]
-        val walkToBoardDeferred = async { walkingDirectionsClient.route(origin, boardStop.location) }
-        val walkToDestDeferred = async { walkingDirectionsClient.route(alightStop.location, destination) }
+        val walkToBoardDeferred = async { directionsClient.route(origin, boardStop.location) }
+        val walkToDestDeferred = async { directionsClient.route(alightStop.location, destination) }
         val walkToBoard = walkToBoardDeferred.await().getOrNull() ?: return@coroutineScope null
         val walkToDest = walkToDestDeferred.await().getOrNull() ?: return@coroutineScope null
 
@@ -220,9 +220,9 @@ class TripPlanner @Inject constructor(
         val transferStopB = candidate.branchB.stops[candidate.transferIndexB]
         val alightStopB = candidate.branchB.stops[candidate.alightIndexB]
 
-        val walkToBoardDeferred = async { walkingDirectionsClient.route(origin, boardStopA.location) }
-        val walkTransferDeferred = async { walkingDirectionsClient.route(transferStopA.location, transferStopB.location) }
-        val walkToDestDeferred = async { walkingDirectionsClient.route(alightStopB.location, destination) }
+        val walkToBoardDeferred = async { directionsClient.route(origin, boardStopA.location) }
+        val walkTransferDeferred = async { directionsClient.route(transferStopA.location, transferStopB.location) }
+        val walkToDestDeferred = async { directionsClient.route(alightStopB.location, destination) }
         val walkToBoard = walkToBoardDeferred.await().getOrNull() ?: return@coroutineScope null
         val walkTransfer = walkTransferDeferred.await().getOrNull() ?: return@coroutineScope null
         val walkToDest = walkToDestDeferred.await().getOrNull() ?: return@coroutineScope null

@@ -17,6 +17,7 @@ import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -87,6 +88,7 @@ fun ExploreMapScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val liveLocation by viewModel.liveLocation.collectAsState()
+    val travelMode by viewModel.travelMode.collectAsState()
     val scaffoldState = rememberBottomSheetScaffoldState()
 
     var nativeMap by remember { mutableStateOf<MapboxMap?>(null) }
@@ -130,19 +132,22 @@ fun ExploreMapScreen(
         )
     }
 
-    // Al mostrar el detalle de un itinerario, ajustar la cámara a los bounds del recorrido.
+    // Al mostrar el detalle de un itinerario (colectivo) o una ruta en auto,
+    // ajustar la cámara a los bounds del recorrido.
     LaunchedEffect(uiState, nativeMap) {
         val state = uiState
-        val map = nativeMap
-        if (state is ExploreUiState.ItineraryDetail && map != null) {
-            val points = routePoints(state.itinerary).map { Point.fromLngLat(it.longitude, it.latitude) }
-            if (points.size >= 2) {
-                val camera = map.cameraForCoordinates(points, EdgeInsets(80.0, 60.0, 380.0, 60.0), null, null)
-                mapViewportState.flyTo(
-                    cameraOptions = camera,
-                    animationOptions = MapAnimationOptions.mapAnimationOptions { duration(600) },
-                )
-            }
+        val map = nativeMap ?: return@LaunchedEffect
+        val points = when (state) {
+            is ExploreUiState.ItineraryDetail -> routePoints(state.itinerary).map { Point.fromLngLat(it.longitude, it.latitude) }
+            is ExploreUiState.DrivingResult -> state.route?.polyline?.map { Point.fromLngLat(it.longitude, it.latitude) } ?: emptyList()
+            else -> emptyList()
+        }
+        if (points.size >= 2) {
+            val camera = map.cameraForCoordinates(points, EdgeInsets(80.0, 60.0, 380.0, 60.0), null, null)
+            mapViewportState.flyTo(
+                cameraOptions = camera,
+                animationOptions = MapAnimationOptions.mapAnimationOptions { duration(600) },
+            )
         }
     }
 
@@ -153,6 +158,8 @@ fun ExploreMapScreen(
         sheetContent = {
             ExploreSheetContent(
                 state = uiState,
+                travelMode = travelMode,
+                onTravelModeSelected = viewModel::onTravelModeSelected,
                 onConfirm = viewModel::onDestinationConfirmed,
                 onCancel = viewModel::onCancelDestination,
                 onItinerarySelected = viewModel::onItinerarySelected,
@@ -303,6 +310,25 @@ private fun ExploreOverlay(
                     }
                 }
             }
+            is ExploreUiState.DrivingResult -> {
+                drawPin(map, uiState.destination)
+                val points = uiState.route?.polyline ?: emptyList()
+                if (points.size >= 2) {
+                    val screenPoints = points.map { geoPoint ->
+                        val screen = map.pixelForCoordinate(Point.fromLngLat(geoPoint.longitude, geoPoint.latitude))
+                        Offset(screen.x.toFloat(), screen.y.toFloat())
+                    }
+                    for (i in 0 until screenPoints.lastIndex) {
+                        drawLine(
+                            color = RedUrbanaColors.AccentBlue,
+                            start = screenPoints[i],
+                            end = screenPoints[i + 1],
+                            strokeWidth = 6f,
+                            cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                        )
+                    }
+                }
+            }
             else -> Unit
         }
     }
@@ -327,6 +353,8 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUserLocationDot
 @Composable
 private fun ExploreSheetContent(
     state: ExploreUiState,
+    travelMode: TravelMode,
+    onTravelModeSelected: (TravelMode) -> Unit,
     onConfirm: () -> Unit,
     onCancel: () -> Unit,
     onItinerarySelected: (TripItinerary) -> Unit,
@@ -339,6 +367,14 @@ private fun ExploreSheetContent(
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        // Selector de modo: solo antes de confirmar destino — una vez que ya
+        // se está mostrando un resultado (colectivo o auto), cambiar de modo
+        // ahí sin cancelar primero sería ambiguo (¿recalcula el mismo destino
+        // en el otro modo, o vuelve a Idle?).
+        if (state is ExploreUiState.Idle || state is ExploreUiState.ConfirmingDestination) {
+            TravelModeSelector(selected = travelMode, onSelected = onTravelModeSelected)
+        }
+
         when (state) {
             is ExploreUiState.Idle -> {
                 Text(
@@ -347,7 +383,11 @@ private fun ExploreSheetContent(
                     color = RedUrbanaColors.TextPrimary,
                 )
                 Text(
-                    text = "Te mostramos las líneas de colectivo que te sirven para llegar.",
+                    text = if (travelMode == TravelMode.CAR) {
+                        "Te mostramos la ruta manejando hasta ahí."
+                    } else {
+                        "Te mostramos las líneas de colectivo que te sirven para llegar."
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = RedUrbanaColors.TextSecondary,
                 )
@@ -359,6 +399,29 @@ private fun ExploreSheetContent(
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Button(onClick = onConfirm) { Text("Ir hasta acá") }
                     TextButton(onClick = onCancel) { Text("Cancelar") }
+                }
+            }
+
+            is ExploreUiState.DrivingResult -> {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column {
+                        Text(text = "Manejando hasta", style = MaterialTheme.typography.bodyMedium, color = RedUrbanaColors.TextSecondary)
+                        Text(text = state.destinationName, style = MaterialTheme.typography.titleMedium, color = RedUrbanaColors.TextPrimary)
+                    }
+                    TextButton(onClick = onCancel) { Text("Cambiar destino") }
+                }
+                when {
+                    state.isLoading -> CircularProgressIndicator(color = RedUrbanaColors.AccentGreenPrimary)
+                    state.error != null -> Text(text = state.error, color = RedUrbanaColors.AlertRed)
+                    state.route != null -> Text(
+                        text = "${state.route.durationMinutes} min · ${formatDistance(state.route.distanceMeters)}",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = RedUrbanaColors.TextPrimary,
+                    )
                 }
             }
 
@@ -417,6 +480,23 @@ private fun ExploreSheetContent(
                 }
             }
         }
+    }
+}
+
+/** A pie / Bici quedan para más adelante — ver LiveMapScreen para el equivalente en el mapa de seguimiento. */
+@Composable
+private fun TravelModeSelector(selected: TravelMode, onSelected: (TravelMode) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(
+            selected = selected == TravelMode.TRANSIT,
+            onClick = { onSelected(TravelMode.TRANSIT) },
+            label = { Text("Colectivo") },
+        )
+        FilterChip(
+            selected = selected == TravelMode.CAR,
+            onClick = { onSelected(TravelMode.CAR) },
+            label = { Text("Auto") },
+        )
     }
 }
 
