@@ -68,4 +68,17 @@ sealed interface AppRoute {
         val routeId: String,
         val vehicleId: String,
     ) : AppRoute
+
+    /**
+     * Navegación paso a paso en auto (cámara siguiendo, instrucciones de
+     * giro, voz, recálculo si te desviás) — ver `feature-lines/navigation/CarNavigationScreen`.
+     * El origen NO viaja acá: lo toma la pantalla del GPS en vivo. Coordenadas
+     * como String por el mismo motivo que [LiveMap.alightingLat]/[LiveMap.alightingLng].
+     */
+    @Serializable
+    data class CarNavigation(
+        val destinationLat: String,
+        val destinationLng: String,
+        val destinationName: String,
+    ) : AppRoute
 }

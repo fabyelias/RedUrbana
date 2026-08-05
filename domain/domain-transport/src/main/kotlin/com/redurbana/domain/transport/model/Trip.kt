@@ -56,4 +56,23 @@ data class DrivingRoute(
     val distanceMeters: Double,
     val durationMinutes: Int,
     val polyline: List<GeoPoint>,
+    /** Vacío salvo que se haya pedido con instrucciones de giro (navegación paso a paso) — ver [RouteStep]. */
+    val steps: List<RouteStep> = emptyList(),
+)
+
+/**
+ * Un tramo entre dos maniobras consecutivas de una [DrivingRoute] (ej. "girá
+ * a la izquierda en Av. Corrientes"). [voiceAnnouncement] viene pre-armado
+ * por Mapbox en español (`language=es`, `voice_instructions=true`); si no
+ * vino, el texto escrito ([instruction]) sirve igual de fallback para leer
+ * en voz alta.
+ */
+data class RouteStep(
+    val instruction: String,
+    val distanceMeters: Double,
+    val maneuverLocation: GeoPoint,
+    val maneuverType: String,
+    val maneuverModifier: String?,
+    val voiceAnnouncement: String?,
+    val polyline: List<GeoPoint>,
 )

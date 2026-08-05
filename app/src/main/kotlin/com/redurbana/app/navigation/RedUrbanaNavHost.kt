@@ -22,6 +22,7 @@ import com.redurbana.core.ui.components.BottomNavItem
 import com.redurbana.core.ui.navigation.AppRoute
 import com.redurbana.feature.alerts.AlertsScreen
 import com.redurbana.feature.lines.ExploreMapScreen
+import com.redurbana.feature.lines.navigation.CarNavigationScreen
 import com.redurbana.feature.map.LiveMapScreen
 import com.redurbana.feature.settings.SettingsScreen
 import com.redurbana.feature.stops.StopsScreen
@@ -87,7 +88,20 @@ fun RedUrbanaNavHost() {
                             ),
                         )
                     },
+                    onStartDriving = { destination, destinationName ->
+                        navController.navigate(
+                            AppRoute.CarNavigation(
+                                destinationLat = destination.latitude.toString(),
+                                destinationLng = destination.longitude.toString(),
+                                destinationName = destinationName,
+                            ),
+                        )
+                    },
                 )
+            }
+
+            composable<AppRoute.CarNavigation> {
+                CarNavigationScreen(onExit = { navController.popBackStack() })
             }
 
             composable<AppRoute.LiveMap> {

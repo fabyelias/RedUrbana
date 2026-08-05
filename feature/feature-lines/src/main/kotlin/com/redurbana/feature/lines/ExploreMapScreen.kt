@@ -85,6 +85,7 @@ fun ExploreMapScreen(
     modifier: Modifier = Modifier,
     viewModel: ExploreViewModel = hiltViewModel(),
     onStartTrip: (routeId: String, alightingStop: Stop) -> Unit = { _, _ -> },
+    onStartDriving: (destination: GeoPoint, destinationName: String) -> Unit = { _, _ -> },
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val liveLocation by viewModel.liveLocation.collectAsState()
@@ -168,6 +169,7 @@ fun ExploreMapScreen(
                     val lastTransit = itinerary.legs.filterIsInstance<TripLeg.Transit>().lastOrNull()
                     lastTransit?.let { onStartTrip(it.routeId.value, it.alightingStop) }
                 },
+                onStartDriving = onStartDriving,
             )
         },
     ) {
@@ -360,6 +362,7 @@ private fun ExploreSheetContent(
     onItinerarySelected: (TripItinerary) -> Unit,
     onBack: () -> Unit,
     onStartTrip: (TripItinerary) -> Unit,
+    onStartDriving: (destination: GeoPoint, destinationName: String) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -417,11 +420,19 @@ private fun ExploreSheetContent(
                 when {
                     state.isLoading -> CircularProgressIndicator(color = RedUrbanaColors.AccentGreenPrimary)
                     state.error != null -> Text(text = state.error, color = RedUrbanaColors.AlertRed)
-                    state.route != null -> Text(
-                        text = "${state.route.durationMinutes} min · ${formatDistance(state.route.distanceMeters)}",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = RedUrbanaColors.TextPrimary,
-                    )
+                    state.route != null -> {
+                        Text(
+                            text = "${state.route.durationMinutes} min · ${formatDistance(state.route.distanceMeters)}",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = RedUrbanaColors.TextPrimary,
+                        )
+                        Button(
+                            onClick = { onStartDriving(state.destination, state.destinationName) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Comenzar viaje")
+                        }
+                    }
                 }
             }
 
