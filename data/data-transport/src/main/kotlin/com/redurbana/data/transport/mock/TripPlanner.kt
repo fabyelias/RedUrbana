@@ -37,6 +37,7 @@ import kotlin.math.roundToInt
 @Singleton
 class TripPlanner @Inject constructor(
     private val walkingDirectionsClient: WalkingDirectionsClient,
+    private val expectedFrequencyData: ExpectedFrequencyData,
 ) {
     private companion object {
         const val MAX_WALK_TO_STOP_METERS = 2_000.0
@@ -254,7 +255,7 @@ class TripPlanner @Inject constructor(
         )
     }
 
-    private fun transitLeg(
+    private suspend fun transitLeg(
         route: RouteDetails,
         branch: Branch,
         boardIndex: Int,
@@ -281,6 +282,7 @@ class TripPlanner @Inject constructor(
             stopsCount = alightIndex - boardIndex,
             estimatedMinutes = rideMinutes,
             nextDepartureMinutes = nextDeparture,
+            typicalHeadwayMinutes = expectedFrequencyData.typicalHeadwayMinutes(route.routeId.value),
             path = (boardIndex..alightIndex).map { branch.stops[it].location },
         )
     }

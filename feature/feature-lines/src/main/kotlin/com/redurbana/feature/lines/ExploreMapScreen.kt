@@ -460,7 +460,8 @@ private fun TripItineraryCard(itinerary: TripItinerary, onClick: () -> Unit) {
             }
         }
 
-        val nextDeparture = itinerary.legs.filterIsInstance<TripLeg.Transit>().firstOrNull()?.nextDepartureMinutes
+        val firstTransit = itinerary.legs.filterIsInstance<TripLeg.Transit>().firstOrNull()
+        val nextDeparture = firstTransit?.nextDepartureMinutes
         Text(
             modifier = Modifier.padding(top = 6.dp),
             text = when {
@@ -471,6 +472,15 @@ private fun TripItineraryCard(itinerary: TripItinerary, onClick: () -> Unit) {
             style = MaterialTheme.typography.bodySmall,
             color = RedUrbanaColors.TextSecondary,
         )
+        // Frecuencia histórica (GTFS 2019), independiente del dato en vivo de
+        // arriba — "cada cuánto pasa normalmente", no una predicción.
+        firstTransit?.typicalHeadwayMinutes?.let { headway ->
+            Text(
+                text = "Normalmente cada ${headway.roundToInt()} min",
+                style = MaterialTheme.typography.labelSmall,
+                color = RedUrbanaColors.TextTertiary,
+            )
+        }
     }
 }
 
@@ -503,6 +513,13 @@ private fun TripStepCard(leg: TripLeg, nextLeg: TripLeg?) {
                             style = MaterialTheme.typography.bodySmall,
                             color = RedUrbanaColors.TextSecondary,
                         )
+                        leg.typicalHeadwayMinutes?.let { headway ->
+                            Text(
+                                text = "Normalmente cada ${headway.roundToInt()} min",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = RedUrbanaColors.TextTertiary,
+                            )
+                        }
                     }
                 }
             }

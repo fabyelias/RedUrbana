@@ -19,6 +19,12 @@ sealed interface TripLeg {
      * simulada en vivo (distancia real al [boardingStop] sobre la velocidad
      * del vehículo), no un horario programado — null si no hay ningún
      * vehículo visible todavía para esa línea.
+     *
+     * [typicalHeadwayMinutes] es distinto: sale de un GTFS oficial de 2019
+     * (frecuencia histórica por línea/día/franja horaria), no de la posición
+     * simulada — es "cada cuánto pasa normalmente", no una predicción del
+     * próximo. Puede coexistir con [nextDepartureMinutes] siendo null (o
+     * viceversa) porque salen de fuentes independientes.
      */
     data class Transit(
         val routeId: RouteId,
@@ -29,6 +35,7 @@ sealed interface TripLeg {
         val stopsCount: Int,
         val estimatedMinutes: Int,
         val nextDepartureMinutes: Int?,
+        val typicalHeadwayMinutes: Double? = null,
         /** Ubicación real de las paradas entre subida y bajada (~cada 500m), para dibujar el mini-mapa. */
         val path: List<GeoPoint>,
     ) : TripLeg
