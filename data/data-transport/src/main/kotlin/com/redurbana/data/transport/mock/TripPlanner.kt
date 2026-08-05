@@ -194,7 +194,16 @@ class TripPlanner @Inject constructor(
         )
         TripItinerary(
             legs = legs,
-            totalMinutes = walkToBoard.durationMinutes + transit.estimatedMinutes + walkToDest.durationMinutes,
+            // + espera hasta que pasa el colectivo (transit.nextDepartureMinutes):
+            // sin esto, dos alternativas con el mismo caminar+viaje quedaban
+            // empatadas aunque una tuviera el bondi a 1 min y la otra a 20 —
+            // así es como Google Maps ordena "salís ahora, llegás a las X".
+            // Si no hay vehículo simulado con posición conocida para esa
+            // línea/ramal, nextDepartureMinutes es null y NO se inventa un
+            // valor (ver doc de la clase: nada de horarios inventados) — se
+            // suma 0, sin penalizar lo que no se sabe.
+            totalMinutes = walkToBoard.durationMinutes + (transit.nextDepartureMinutes ?: 0) +
+                transit.estimatedMinutes + walkToDest.durationMinutes,
             transferCount = 0,
         )
     }
@@ -229,8 +238,18 @@ class TripPlanner @Inject constructor(
         )
         TripItinerary(
             legs = legs,
-            totalMinutes = walkToBoard.durationMinutes + transitA.estimatedMinutes + walkTransfer.durationMinutes +
-                transitB.estimatedMinutes + walkToDest.durationMinutes,
+            // Solo se suma la espera del PRIMER colectivo (transitA), igual que
+            // en buildDirectItinerary. La del segundo (transitB) NO se suma:
+            // nextDepartureMinutes sale de la posición ACTUAL del vehículo
+            // simulado, "si salieras ya" — para el segundo tramo el usuario en
+            // realidad llega al punto de transbordo más tarde (después de
+            // caminar + viajar en el primero), y no hay forma de predecir
+            // dónde va a estar ESE vehículo en ese momento futuro con los
+            // datos que tiene la app hoy. Sumarlo igual sería inventar un
+            // número, algo que este archivo evita a propósito (ver doc de la
+            // clase).
+            totalMinutes = walkToBoard.durationMinutes + (transitA.nextDepartureMinutes ?: 0) + transitA.estimatedMinutes +
+                walkTransfer.durationMinutes + transitB.estimatedMinutes + walkToDest.durationMinutes,
             transferCount = 1,
         )
     }
