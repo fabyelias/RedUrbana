@@ -1,13 +1,19 @@
 name: Build debug APK
 
 # Pensado para instalar en la tablet sin PC ni cable USB: cada push a main
-# genera un APK debug descargable desde la pestaña "Actions" de GitHub, en
-# el navegador de la propia tablet (Settings → Actions → runs → el más
-# reciente → sección Artifacts, al final de la página).
+# genera un APK debug y lo publica en un Release fijo (tag "debug-latest"),
+# así el link de descarga es SIEMPRE el mismo (se pisa en cada corrida) y no
+# pide login por ser repo público — a diferencia de los artifacts de
+# Actions, que cambian de URL en cada run y sí piden estar logueado.
+#
+# Link fijo: https://github.com/fabyelias/RedUrbana/releases/download/debug-latest/app-debug.apk
 on:
   push:
     branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -54,8 +60,14 @@ jobs:
         env:
           ORG_GRADLE_PROJECT_MAPBOX_DOWNLOADS_TOKEN: ${{ secrets.MAPBOX_DOWNLOADS_TOKEN }}
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: redurbana-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 30
+      # Se borra el release anterior (si existe) para poder reusar el mismo
+      # tag/nombre de asset — así la URL de descarga no cambia nunca.
+      - name: Publicar Release fijo (debug-latest)
+        run: |
+          gh release delete debug-latest --yes --cleanup-tag || true
+          gh release create debug-latest \
+            app/build/outputs/apk/debug/app-debug.apk \
+            --title "RedUrbana (debug, auto)" \
+            --notes "APK generado automáticamente desde el último push a main (commit ${{ github.sha }})."
+        env:
+          GH_TOKEN: ${{ github.token }}
