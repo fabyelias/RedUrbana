@@ -35,6 +35,7 @@ dependencies {
     implementation(libs.mapbox.compose)
 
     implementation(libs.play.services.location)
+    implementation(libs.activity.compose)
     implementation(libs.hilt.navigation.compose)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)

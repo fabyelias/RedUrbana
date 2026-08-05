@@ -1,8 +1,13 @@
 package com.redurbana.feature.map
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -13,7 +18,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.mapbox.geojson.Point
 import com.mapbox.maps.MapboxMap
@@ -23,7 +30,11 @@ import com.mapbox.maps.extension.compose.animation.viewport.rememberMapViewportS
 import com.mapbox.maps.extension.compose.style.MapboxStandardStyle
 import com.mapbox.maps.extension.compose.style.standard.StandardLightPreset
 import com.mapbox.maps.extension.compose.style.standard.rememberStandardStyleState
+import com.mapbox.maps.plugin.PuckBearing
 import com.mapbox.maps.plugin.animation.MapAnimationOptions
+import com.mapbox.maps.plugin.locationcomponent.createDefault2DPuck
+import com.mapbox.maps.plugin.locationcomponent.location
+import com.mapbox.maps.plugin.viewport.data.FollowPuckViewportStateOptions
 import com.redurbana.core.ui.components.LiveBadge
 import com.redurbana.domain.transport.GeoBounds
 import com.redurbana.domain.transport.model.GeoPoint
@@ -46,6 +57,11 @@ import com.redurbana.feature.map.cluster.VehicleClusterer
  *    Canvas — la traducción GeoPoint→pantalla ahora usa
  *    `mapboxMap.pixelForCoordinate(Point)` en vez de la Projection de
  *    Google, pero el principio (una sola superficie de dibujo) es el mismo.
+ *  - La ubicación del usuario (punto azul) se dibuja con el LocationComponent
+ *    nativo de Mapbox (`mapView.location`), no a mano — así queda anclado a
+ *    lat/lng por el SDK y no se corre al mover el mapa. La cámara arranca y
+ *    se mantiene siguiendo ese puck (`transitionToFollowPuckState`) salvo que
+ *    haya un vehículo seguido, en cuyo caso la cámara lo sigue a él en su lugar.
  *
  * NOTA: la API de Compose de Mapbox evoluciona rápido entre versiones
  * menores — validar los nombres exactos (StandardLightPreset,
@@ -60,16 +76,27 @@ fun LiveMapScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    // Congreso, CABA — mismo punto de partida que la referencia visual.
-    val congreso = Point.fromLngLat(-58.3924, -34.6095) // Mapbox: (lng, lat), OJO con el orden
-
-    val mapViewportState = rememberMapViewportState {
-        setCameraOptions {
-            center(congreso)
-            zoom(16.0)
-            pitch(45.0) // tilt para que los edificios 3D se vean con perspectiva
+    val context = LocalContext.current
+    var hasLocationPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_FINE_LOCATION,
+            ) == PackageManager.PERMISSION_GRANTED,
+        )
+    }
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { granted -> hasLocationPermission = granted }
+    LaunchedEffect(Unit) {
+        if (!hasLocationPermission) {
+            locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
         }
     }
+
+    // Sin centro inicial fijo: la cámara arranca y se mantiene sobre la
+    // ubicación real del usuario vía transitionToFollowPuckState() más abajo.
+    val mapViewportState = rememberMapViewportState()
 
     // Estilo oscuro nativo con edificios 3D — sin JSON de estilo custom.
     val standardStyleState = rememberStandardStyleState().apply {
@@ -95,6 +122,19 @@ fun LiveMapScreen(
         )
     }
 
+    // Sin vehículo seguido: la cámara sigue al usuario (arranque y estado
+    // por defecto). Al dejar de seguir un vehículo, esto retoma el seguimiento.
+    LaunchedEffect(hasLocationPermission, cameraTarget) {
+        if (hasLocationPermission && cameraTarget == null) {
+            mapViewportState.transitionToFollowPuckState(
+                followPuckViewportStateOptions = FollowPuckViewportStateOptions.Builder()
+                    .zoom(16.0)
+                    .pitch(45.0) // tilt para que los edificios 3D se vean con perspectiva
+                    .build(),
+            )
+        }
+    }
+
     val vehicles = (uiState as? MapUiState.Success)?.vehicles.orEmpty()
     val selectedId = (uiState as? MapUiState.Success)?.selectedVehicleId
     val selectedVehicle = vehicles.firstOrNull { it.vehicleId.value == selectedId }
@@ -111,6 +151,13 @@ fun LiveMapScreen(
         ) {
             MapEffect(Unit) { mapView ->
                 nativeMap = mapView.mapboxMap
+                mapView.location.updateSettings {
+                    enabled = true
+                    puckBearing = PuckBearing.COURSE
+                    puckBearingEnabled = true
+                    locationPuck = createDefault2DPuck(withBearing = true)
+                    pulsingEnabled = true
+                }
                 mapView.mapboxMap.subscribeCameraChanged {
                     nativeMap = mapView.mapboxMap
                     currentZoom = mapView.mapboxMap.cameraState.zoom.toFloat()
@@ -152,6 +199,15 @@ fun LiveMapScreen(
                 .padding(16.dp),
         )
 
+        if (!hasLocationPermission) {
+            LocationPermissionRationale(
+                onRetryClick = {
+                    locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                },
+                modifier = Modifier.align(Alignment.Center),
+            )
+        }
+
         when {
             uiState is MapUiState.Loading -> {
                 Text(
@@ -192,6 +248,33 @@ private fun ColdStartMessage(modifier: Modifier = Modifier) {
             color = com.redurbana.core.ui.theme.RedUrbanaColors.TextSecondary,
             modifier = Modifier.padding(top = 4.dp),
         )
+    }
+}
+
+/**
+ * Se muestra cuando el usuario todavía no otorgó el permiso de ubicación —
+ * sin esto el mapa no puede mostrar el punto azul ni seguir al usuario.
+ */
+@Composable
+private fun LocationPermissionRationale(onRetryClick: () -> Unit, modifier: Modifier = Modifier) {
+    com.redurbana.core.ui.components.GlassCard(
+        modifier = modifier.padding(24.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+    ) {
+        Text(
+            text = "Necesitamos tu ubicación",
+            style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+            color = com.redurbana.core.ui.theme.RedUrbanaColors.TextPrimary,
+        )
+        Text(
+            text = "Activá el permiso de ubicación para ver dónde estás parado en el mapa.",
+            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+            color = com.redurbana.core.ui.theme.RedUrbanaColors.TextSecondary,
+            modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
+        )
+        Button(onClick = onRetryClick) {
+            Text("Reintentar")
+        }
     }
 }
 
