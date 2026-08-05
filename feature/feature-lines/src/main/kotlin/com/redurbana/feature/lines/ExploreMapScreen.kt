@@ -191,13 +191,14 @@ fun ExploreMapScreen(
 
             // Botón "mi ubicación" estilo Google Maps: recentra sin pelear
             // con el usuario mientras panea buscando dónde ir.
-            if (liveLocation != null) {
+            val userLocation = liveLocation
+            if (userLocation != null) {
                 FloatingActionButton(
                     onClick = {
                         recenterScope.launch {
                             mapViewportState.flyTo(
                                 cameraOptions = com.mapbox.maps.CameraOptions.Builder()
-                                    .center(Point.fromLngLat(liveLocation.longitude, liveLocation.latitude))
+                                    .center(Point.fromLngLat(userLocation.longitude, userLocation.latitude))
                                     .zoom(15.0)
                                     .build(),
                                 animationOptions = MapAnimationOptions.mapAnimationOptions { duration(600) },
