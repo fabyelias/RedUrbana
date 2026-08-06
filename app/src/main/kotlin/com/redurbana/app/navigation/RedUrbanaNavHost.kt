@@ -48,25 +48,35 @@ fun RedUrbanaNavHost() {
         else -> BottomNavItem.HOME
     }
 
+    // Navegación paso a paso en auto: pantalla inmersiva de manejar, no una
+    // pestaña más — la barra de navegación de abajo (Explorar/Colectivo/Más)
+    // le robaba espacio al mapa justo mientras se está manejando, que es
+    // cuando más importa verlo entero. Se saca del todo en vez de dejarla
+    // más chica: no tiene sentido cambiar de pestaña en medio de un viaje
+    // activo (para eso está la ✕ de salir, ya visible en esa pantalla).
+    val isCarNavigationActive = backStackEntry?.destination?.hasRoute(AppRoute.CarNavigation::class) == true
+
     Scaffold(
         bottomBar = {
-            BottomNavBar(
-                selected = selectedItem,
-                onItemSelected = { item ->
-                    val route: AppRoute = when (item) {
-                        BottomNavItem.HOME -> AppRoute.Explore
-                        BottomNavItem.MORE -> AppRoute.More
-                    }
-                    navController.navigate(route) {
-                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
-                },
-                onCenterButtonClick = {
-                    navController.navigate(AppRoute.LiveMap()) { launchSingleTop = true }
-                },
-            )
+            if (!isCarNavigationActive) {
+                BottomNavBar(
+                    selected = selectedItem,
+                    onItemSelected = { item ->
+                        val route: AppRoute = when (item) {
+                            BottomNavItem.HOME -> AppRoute.Explore
+                            BottomNavItem.MORE -> AppRoute.More
+                        }
+                        navController.navigate(route) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    onCenterButtonClick = {
+                        navController.navigate(AppRoute.LiveMap()) { launchSingleTop = true }
+                    },
+                )
+            }
         },
     ) { innerPadding ->
         NavHost(
