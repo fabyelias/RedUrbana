@@ -106,9 +106,16 @@ class DirectionsClient @Inject constructor(
         // Solo se manda si el vehículo elegido lo necesita (camión, colectivo,
         // ambulancia, bomberos — ver VehicleCategory.requiresDimensions): son
         // parámetros reales de la Directions API, "mejor esfuerzo" del lado de
-        // Mapbox — evita calles con un límite de altura/ancho/peso cargado por
-        // debajo de la medida del vehículo, no garantiza cubrir cada
-        // restricción real que pueda existir.
+        // Mapbox — max_height/width/weight evitan calles con un límite CARGADO
+        // en el mapa de Mapbox por debajo de la medida del vehículo, pero si
+        // esa calle puntual no tiene el dato cargado (reporte de campo: un
+        // túnel real de 2m no tenía la restricción de altura en los datos de
+        // Mapbox para esa zona, así que max_height=4 no lo evitó), no hace
+        // nada — silenciosamente no hay restricción que respetar. Por eso
+        // también se manda exclude=tunnel para vehículos grandes: no depende
+        // de que el túnel tenga la altura cargada, evita CUALQUIER túnel de
+        // entrada (con la misma salvedad "mejor esfuerzo": si no hay otra
+        // forma de llegar, Mapbox igual lo cruza en vez de fallar la ruta).
         dimensions: VehicleDimensions? = null,
     ): Result<MapboxRoute> =
         withContext(Dispatchers.IO) {
@@ -117,7 +124,7 @@ class DirectionsClient @Inject constructor(
                 val coordinates = "${from.longitude},${from.latitude};${to.longitude},${to.latitude}"
                 val extraParams = if (withSteps) "&steps=true&voice_instructions=true&voice_units=metric&language=es" else ""
                 val dimensionParams = if (dimensions != null) {
-                    "&max_height=${dimensions.heightMeters}&max_width=${dimensions.widthMeters}&max_weight=${dimensions.weightTons}"
+                    "&max_height=${dimensions.heightMeters}&max_width=${dimensions.widthMeters}&max_weight=${dimensions.weightTons}&exclude=tunnel"
                 } else {
                     ""
                 }
