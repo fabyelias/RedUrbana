@@ -17,14 +17,20 @@ import com.redurbana.domain.transport.model.VehicleDimensions
 import com.redurbana.domain.transport.model.VehicleProfile
 import com.redurbana.domain.transport.usecase.GetDrivingRouteUseCase
 import com.redurbana.domain.transport.usecase.GetTripItinerariesUseCase
+import com.redurbana.domain.transport.usecase.ObserveActiveVehicleUseCase
+import com.redurbana.domain.transport.usecase.ObserveSavedVehiclesUseCase
+import com.redurbana.domain.transport.usecase.RemoveVehicleUseCase
+import com.redurbana.domain.transport.usecase.SelectVehicleUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
@@ -73,6 +79,10 @@ class ExploreViewModel @Inject constructor(
     private val getDrivingRoute: GetDrivingRouteUseCase,
     private val locationSource: DeviceLocationSource,
     private val observeNearbyLiveDrivers: ObserveNearbyLiveDriversUseCase,
+    observeSavedVehicles: ObserveSavedVehiclesUseCase,
+    observeActiveVehicle: ObserveActiveVehicleUseCase,
+    private val selectVehicle: SelectVehicleUseCase,
+    private val removeVehicle: RemoveVehicleUseCase,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<ExploreUiState>(ExploreUiState.Idle)
@@ -85,29 +95,53 @@ class ExploreViewModel @Inject constructor(
         _travelMode.value = mode
     }
 
-    private val _vehicleProfile = MutableStateFlow(VehicleProfile())
-    val vehicleProfile: StateFlow<VehicleProfile> = _vehicleProfile.asStateFlow()
+    /**
+     * "Mis vehículos" persiste entre reinicios de la app (ver
+     * VehicleGarageRepository) — pedido explícito: uno puede manejar una
+     * ambulancia hoy y su auto mañana, sin tener que volver a cargar las
+     * medidas de la ambulancia cada vez. Eagerly (no WhileSubscribed): el
+     * repositorio ya tiene el valor guardado desde el arranque del proceso
+     * (SharedPreferences leído en el constructor), así que no tiene sentido
+     * esperar a que la UI empiece a coleccionar para reflejarlo acá.
+     */
+    val savedVehicles: StateFlow<List<VehicleProfile>> =
+        observeSavedVehicles().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val vehicleProfile: StateFlow<VehicleProfile> =
+        observeActiveVehicle().stateIn(viewModelScope, SharingStarted.Eagerly, VehicleProfile())
 
     /**
-     * Categorías como AMBULANCE/TRUCK/BUS/FIRE_TRUCK ([VehicleCategory.requiresDimensions])
-     * necesitan que el usuario cargue medidas ANTES de poder pedir una ruta
-     * (ver [VehicleCategory] — Mapbox recién puede evitar calles con
-     * restricción de altura/ancho/peso si se las mandamos). Elegir una de
-     * esas categorías limpia cualquier dimensión previa (de otro vehículo)
-     * y deja el perfil "incompleto" — la pantalla se encarga de mostrar el
-     * diálogo de medidas antes de dejar confirmar destino.
+     * Categoría recién elegida que YA necesita medidas ([VehicleCategory.requiresDimensions])
+     * y todavía no las tiene guardadas — dispara el diálogo. No-null implica
+     * "esperando que el usuario cargue medidas o cancele"; nunca convive con
+     * [vehicleProfile] apuntando a esa misma categoría sin dimensiones (acá
+     * no se persiste nada hasta tener el perfil completo).
      */
+    private val _pendingDimensionsCategory = MutableStateFlow<VehicleCategory?>(null)
+    val pendingDimensionsCategory: StateFlow<VehicleCategory?> = _pendingDimensionsCategory.asStateFlow()
+
     fun onVehicleCategorySelected(category: VehicleCategory) {
-        _vehicleProfile.value = VehicleProfile(category = category, dimensions = null)
+        val alreadySaved = savedVehicles.value.firstOrNull { it.category == category }
+        when {
+            alreadySaved != null -> viewModelScope.launch { selectVehicle(alreadySaved) }
+            !category.requiresDimensions -> viewModelScope.launch { selectVehicle(VehicleProfile(category)) }
+            else -> _pendingDimensionsCategory.value = category
+        }
     }
 
     fun onVehicleDimensionsConfirmed(dimensions: VehicleDimensions) {
-        _vehicleProfile.value = _vehicleProfile.value.copy(dimensions = dimensions)
+        val category = _pendingDimensionsCategory.value ?: return
+        _pendingDimensionsCategory.value = null
+        viewModelScope.launch { selectVehicle(VehicleProfile(category, dimensions)) }
     }
 
-    /** Canceló el diálogo de medidas sin cargarlas: no tiene sentido dejar seleccionado un vehículo grande sin sus medidas, así que vuelve a Auto. */
     fun onVehicleDimensionsCancelled() {
-        _vehicleProfile.value = VehicleProfile(category = VehicleCategory.CAR)
+        _pendingDimensionsCategory.value = null
+    }
+
+    /** Sacar un vehículo de "los míos" — no afecta a los demás guardados. */
+    fun onVehicleRemoved(category: VehicleCategory) {
+        viewModelScope.launch { removeVehicle(category) }
     }
 
     private val _searchQuery = MutableStateFlow("")
@@ -310,7 +344,7 @@ class ExploreViewModel @Inject constructor(
                 destinationName = current.placeName,
                 isLoading = true,
             )
-            getDrivingRoute(origin, current.point, _vehicleProfile.value)
+            getDrivingRoute(origin, current.point, vehicleProfile.value)
                 .onSuccess { route ->
                     _uiState.value = ExploreUiState.DrivingResult(
                         destination = current.point,

@@ -2,8 +2,10 @@ package com.redurbana.data.transport.di
 
 import com.redurbana.data.transport.directions.DirectionsClient
 import com.redurbana.data.transport.mock.MockTransportProvider
+import com.redurbana.data.transport.vehicle.SharedPrefsVehicleGarageRepository
 import com.redurbana.domain.transport.DirectionsProvider
 import com.redurbana.domain.transport.TransportDataProvider
+import com.redurbana.domain.transport.VehicleGarageRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -40,4 +42,9 @@ abstract class TransportModule {
     abstract fun bindDirectionsProvider(
         impl: DirectionsClient,
     ): DirectionsProvider
+
+    @Binds
+    abstract fun bindVehicleGarageRepository(
+        impl: SharedPrefsVehicleGarageRepository,
+    ): VehicleGarageRepository
 }

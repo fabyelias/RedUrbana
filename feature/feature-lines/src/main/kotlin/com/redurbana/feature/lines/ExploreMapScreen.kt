@@ -108,6 +108,8 @@ fun ExploreMapScreen(
     val liveLocation by viewModel.liveLocation.collectAsState()
     val travelMode by viewModel.travelMode.collectAsState()
     val vehicleProfile by viewModel.vehicleProfile.collectAsState()
+    val savedVehicles by viewModel.savedVehicles.collectAsState()
+    val pendingDimensionsCategory by viewModel.pendingDimensionsCategory.collectAsState()
     val nearbyDrivers by viewModel.nearbyDrivers.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val searchSuggestions by viewModel.searchSuggestions.collectAsState()
@@ -202,11 +204,11 @@ fun ExploreMapScreen(
     // Camión/colectivo/ambulancia/bomberos necesitan medidas antes de poder
     // pedir ruta (Mapbox recién puede evitar calles con restricción de
     // altura/ancho/peso si se las mandamos) — el diálogo aparece apenas se
-    // elige uno de esos vehículos y todavía no las cargó, en cualquier
-    // pantalla del flujo (no solo antes de confirmar destino).
-    if (vehicleProfile.category.requiresDimensions && vehicleProfile.dimensions == null) {
+    // elige uno de esos vehículos por primera vez (si ya estaba guardado de
+    // antes, ExploreViewModel reusa sus medidas directo, sin volver a preguntar).
+    pendingDimensionsCategory?.let { category ->
         VehicleDimensionsDialog(
-            category = vehicleProfile.category,
+            category = category,
             onConfirm = viewModel::onVehicleDimensionsConfirmed,
             onDismiss = viewModel::onVehicleDimensionsCancelled,
         )
@@ -222,7 +224,10 @@ fun ExploreMapScreen(
                 travelMode = travelMode,
                 onTravelModeSelected = viewModel::onTravelModeSelected,
                 vehicleProfile = vehicleProfile,
+                savedVehicles = savedVehicles,
+                pendingDimensionsCategory = pendingDimensionsCategory,
                 onVehicleCategorySelected = viewModel::onVehicleCategorySelected,
+                onVehicleRemoved = viewModel::onVehicleRemoved,
                 onConfirm = viewModel::onDestinationConfirmed,
                 onCancel = viewModel::onCancelDestination,
                 onItinerarySelected = viewModel::onItinerarySelected,
@@ -491,7 +496,10 @@ private fun ExploreSheetContent(
     travelMode: TravelMode,
     onTravelModeSelected: (TravelMode) -> Unit,
     vehicleProfile: VehicleProfile,
+    savedVehicles: List<VehicleProfile>,
+    pendingDimensionsCategory: VehicleCategory?,
     onVehicleCategorySelected: (VehicleCategory) -> Unit,
+    onVehicleRemoved: (VehicleCategory) -> Unit,
     onConfirm: () -> Unit,
     onCancel: () -> Unit,
     onItinerarySelected: (TripItinerary) -> Unit,
@@ -512,7 +520,21 @@ private fun ExploreSheetContent(
         if (state is ExploreUiState.Idle || state is ExploreUiState.ConfirmingDestination) {
             TravelModeSelector(selected = travelMode, onSelected = onTravelModeSelected)
             if (travelMode == TravelMode.CAR) {
-                VehiclePicker(selected = vehicleProfile.category, onSelected = onVehicleCategorySelected)
+                val selectedCategory = pendingDimensionsCategory ?: vehicleProfile.category
+                if (savedVehicles.isNotEmpty()) {
+                    MyVehiclesRow(
+                        savedVehicles = savedVehicles,
+                        selected = selectedCategory,
+                        onSelected = onVehicleCategorySelected,
+                        onRemoved = onVehicleRemoved,
+                    )
+                    Text(
+                        text = "Agregar otro",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = RedUrbanaColors.TextTertiary,
+                    )
+                }
+                VehiclePicker(selected = selectedCategory, onSelected = onVehicleCategorySelected)
             }
         }
 
@@ -657,12 +679,64 @@ private fun TravelModeSelector(selected: TravelMode, onSelected: (TravelMode) ->
 }
 
 /**
+ * "Mis vehículos" — los que el usuario ya usó alguna vez en este
+ * dispositivo (persisten entre reinicios, ver VehicleGarageRepository).
+ * Elegir uno acá reactiva sus medidas guardadas al toque, sin volver a
+ * preguntar altura/ancho/peso — pedido explícito: manejar la ambulancia hoy
+ * y el auto mañana sin tener que recargar nada cada vez.
+ */
+@Composable
+private fun MyVehiclesRow(
+    savedVehicles: List<VehicleProfile>,
+    selected: VehicleCategory,
+    onSelected: (VehicleCategory) -> Unit,
+    onRemoved: (VehicleCategory) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = "Mis vehículos",
+            style = MaterialTheme.typography.labelSmall,
+            color = RedUrbanaColors.TextTertiary,
+        )
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(savedVehicles, key = { it.category }) { profile ->
+                SavedVehicleChip(
+                    profile = profile,
+                    selected = profile.category == selected,
+                    onClick = { onSelected(profile.category) },
+                    onRemove = { onRemoved(profile.category) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SavedVehicleChip(profile: VehicleProfile, selected: Boolean, onClick: () -> Unit, onRemove: () -> Unit) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text("${profile.category.emoji} ${profile.category.label()}") },
+        trailingIcon = {
+            Text(
+                text = "✕",
+                style = MaterialTheme.typography.labelSmall,
+                color = RedUrbanaColors.TextSecondary,
+                modifier = Modifier.clickable(onClick = onRemove),
+            )
+        },
+    )
+}
+
+/**
  * Qué vehículo maneja el usuario — el punto "estás acá" del mapa pasa a
  * dibujarse con el emoji de la categoría elegida (ver drawVehicleDot) y, si
  * hace falta (camión/colectivo/ambulancia/bomberos), dispara el diálogo de
  * medidas para que la ruta evite calles que no puede pasar. Los de
  * emergencia van aparte y con borde propio para "destacarlos", como pidió
  * el usuario — es solo agrupación visual, no cambia cómo se calcula la ruta.
+ * Es "agregar otro" cuando ya hay vehículos guardados (ver MyVehiclesRow) —
+ * elegir acá una categoría nueva la suma a "mis vehículos" sola.
  */
 @Composable
 private fun VehiclePicker(selected: VehicleCategory, onSelected: (VehicleCategory) -> Unit) {
