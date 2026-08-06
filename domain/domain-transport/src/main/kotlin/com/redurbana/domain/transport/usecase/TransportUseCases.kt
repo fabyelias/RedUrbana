@@ -4,6 +4,7 @@ import com.redurbana.domain.transport.DirectionsProvider
 import com.redurbana.domain.transport.GeoBounds
 import com.redurbana.domain.transport.TransportDataProvider
 import com.redurbana.domain.transport.model.DrivingRoute
+import com.redurbana.domain.transport.model.DrivingRouteOptions
 import com.redurbana.domain.transport.model.ArrivalEstimate
 import com.redurbana.domain.transport.model.GeoPoint
 import com.redurbana.domain.transport.model.RouteId
@@ -81,7 +82,7 @@ class GetRouteDetailsUseCase @Inject constructor(
         provider.getRouteDetails(routeId)
 }
 
-/** Modo "Auto" de ExploreMapScreen: ruta real manejando, no transporte público. */
+/** Modo "Auto" de ExploreMapScreen: ruta real manejando, no transporte público. Usado por CarNavigationViewModel (arranque + recálculos). */
 class GetDrivingRouteUseCase @Inject constructor(
     private val provider: DirectionsProvider,
 ) {
@@ -90,4 +91,15 @@ class GetDrivingRouteUseCase @Inject constructor(
         destination: GeoPoint,
         vehicleProfile: VehicleProfile = VehicleProfile(),
     ): Result<DrivingRoute> = provider.getDrivingRoute(origin, destination, vehicleProfile)
+}
+
+/** Momento de elegir destino (ExploreViewModel): puede devolver dos rutas para elegir — ver DrivingRouteOptions. */
+class GetAlternativeDrivingRoutesUseCase @Inject constructor(
+    private val provider: DirectionsProvider,
+) {
+    suspend operator fun invoke(
+        origin: GeoPoint,
+        destination: GeoPoint,
+        vehicleProfile: VehicleProfile = VehicleProfile(),
+    ): Result<DrivingRouteOptions> = provider.getAlternativeDrivingRoutes(origin, destination, vehicleProfile)
 }

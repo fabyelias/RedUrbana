@@ -73,6 +73,20 @@ data class DrivingRoute(
 enum class RouteRestrictionViolation { TUNNEL, MAX_HEIGHT, MAX_WIDTH, MAX_WEIGHT }
 
 /**
+ * Las dos rutas que le importan a un vehículo grande cuando de verdad hay
+ * una diferencia entre ellas — ver [com.redurbana.domain.transport.DirectionsProvider.getAlternativeDrivingRoutes].
+ * [direct] queda en null cuando evitar túneles/restricciones NO cambió la
+ * ruta (la enorme mayoría de los viajes): en ese caso no tiene sentido
+ * ofrecer una "alternativa" idéntica a la recomendada.
+ */
+data class DrivingRouteOptions(
+    /** La que respeta max_height/width/weight y exclude=tunnel — la que ya se ofrecía antes de esto. */
+    val recommended: DrivingRoute,
+    /** La más rápida SIN esas restricciones — puede pasar por un túnel bajo o una calle angosta para este vehículo. Null si coincide con [recommended]. */
+    val direct: DrivingRoute? = null,
+)
+
+/**
  * Un tramo entre dos maniobras consecutivas de una [DrivingRoute] (ej. "girá
  * a la izquierda en Av. Corrientes"). [voiceAnnouncement] viene pre-armado
  * por Mapbox en español (`language=es`, `voice_instructions=true`); si no

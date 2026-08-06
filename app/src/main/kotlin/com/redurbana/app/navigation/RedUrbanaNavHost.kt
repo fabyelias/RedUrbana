@@ -98,7 +98,7 @@ fun RedUrbanaNavHost() {
                             ),
                         )
                     },
-                    onStartDriving = { destination, destinationName, vehicleProfile ->
+                    onStartDriving = { destination, destinationName, vehicleProfile, useDirectRoute ->
                         navController.navigate(
                             AppRoute.CarNavigation(
                                 destinationLat = destination.latitude.toString(),
@@ -108,6 +108,7 @@ fun RedUrbanaNavHost() {
                                 vehicleHeightMeters = vehicleProfile.dimensions?.heightMeters?.toString() ?: "",
                                 vehicleWidthMeters = vehicleProfile.dimensions?.widthMeters?.toString() ?: "",
                                 vehicleWeightTons = vehicleProfile.dimensions?.weightTons?.toString() ?: "",
+                                useDirectRoute = useDirectRoute,
                             ),
                         )
                     },

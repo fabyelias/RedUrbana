@@ -73,6 +73,7 @@ import com.redurbana.core.ui.components.RouteBadge
 import com.redurbana.core.ui.theme.LineColorProvider
 import com.redurbana.core.ui.theme.RedUrbanaColors
 import com.redurbana.domain.crowdsourcing.model.LiveDriverPosition
+import com.redurbana.domain.transport.model.DrivingRoute
 import com.redurbana.domain.transport.model.GeoPoint
 import com.redurbana.domain.transport.model.RouteRestrictionViolation
 import com.redurbana.domain.transport.model.Stop
@@ -104,7 +105,7 @@ fun ExploreMapScreen(
     modifier: Modifier = Modifier,
     viewModel: ExploreViewModel = hiltViewModel(),
     onStartTrip: (routeId: String, alightingStop: Stop) -> Unit = { _, _ -> },
-    onStartDriving: (destination: GeoPoint, destinationName: String, vehicleProfile: VehicleProfile) -> Unit = { _, _, _ -> },
+    onStartDriving: (destination: GeoPoint, destinationName: String, vehicleProfile: VehicleProfile, useDirectRoute: Boolean) -> Unit = { _, _, _, _ -> },
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val liveLocation by viewModel.liveLocation.collectAsState()
@@ -180,7 +181,7 @@ fun ExploreMapScreen(
         val map = nativeMap ?: return@LaunchedEffect
         val points = when (state) {
             is ExploreUiState.ItineraryDetail -> routePoints(state.itinerary).map { Point.fromLngLat(it.longitude, it.latitude) }
-            is ExploreUiState.DrivingResult -> state.route?.polyline?.map { Point.fromLngLat(it.longitude, it.latitude) } ?: emptyList()
+            is ExploreUiState.DrivingResult -> state.activeRoute?.polyline?.map { Point.fromLngLat(it.longitude, it.latitude) } ?: emptyList()
             else -> emptyList()
         }
         if (points.size >= 2) {
@@ -197,9 +198,9 @@ fun ExploreMapScreen(
     // reproyecta sola en cada frame, así que nunca se puede "despegar" del
     // mapa al panear — que es justo lo que le pasaba a la versión anterior
     // dibujada en Canvas.
-    LaunchedEffect((uiState as? ExploreUiState.DrivingResult)?.route, nativeMap) {
+    LaunchedEffect((uiState as? ExploreUiState.DrivingResult)?.activeRoute, nativeMap) {
         val map = nativeMap ?: return@LaunchedEffect
-        val polyline = (uiState as? ExploreUiState.DrivingResult)?.route?.polyline
+        val polyline = (uiState as? ExploreUiState.DrivingResult)?.activeRoute?.polyline
         updateDrivingRouteLayer(map, polyline)
     }
 
@@ -230,6 +231,7 @@ fun ExploreMapScreen(
                 pendingDimensionsCategory = pendingDimensionsCategory,
                 onVehicleCategorySelected = viewModel::onVehicleCategorySelected,
                 onVehicleRemoved = viewModel::onVehicleRemoved,
+                onRouteChoiceSelected = viewModel::onRouteChoiceSelected,
                 onConfirm = viewModel::onDestinationConfirmed,
                 onCancel = viewModel::onCancelDestination,
                 onItinerarySelected = viewModel::onItinerarySelected,
@@ -502,12 +504,13 @@ private fun ExploreSheetContent(
     pendingDimensionsCategory: VehicleCategory?,
     onVehicleCategorySelected: (VehicleCategory) -> Unit,
     onVehicleRemoved: (VehicleCategory) -> Unit,
+    onRouteChoiceSelected: (useDirectRoute: Boolean) -> Unit,
     onConfirm: () -> Unit,
     onCancel: () -> Unit,
     onItinerarySelected: (TripItinerary) -> Unit,
     onBack: () -> Unit,
     onStartTrip: (TripItinerary) -> Unit,
-    onStartDriving: (destination: GeoPoint, destinationName: String, vehicleProfile: VehicleProfile) -> Unit,
+    onStartDriving: (destination: GeoPoint, destinationName: String, vehicleProfile: VehicleProfile, useDirectRoute: Boolean) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -582,17 +585,41 @@ private fun ExploreSheetContent(
                 when {
                     state.isLoading -> CircularProgressIndicator(color = RedUrbanaColors.AccentGreenPrimary)
                     state.error != null -> Text(text = state.error, color = RedUrbanaColors.AlertRed)
-                    state.route != null -> {
-                        Text(
-                            text = "${state.route.durationMinutes} min · ${formatDistance(state.route.distanceMeters)}",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = RedUrbanaColors.TextPrimary,
-                        )
-                        if (state.route.unavoidableViolations.isNotEmpty()) {
-                            UnavoidableViolationWarning(violations = state.route.unavoidableViolations)
+                    state.routeOptions != null -> {
+                        val direct = state.routeOptions.direct
+                        if (direct != null) {
+                            // Solo aparecen las dos opciones cuando evitar el
+                            // túnel/restricción de verdad cambió la ruta (ver
+                            // DrivingRouteOptions) — pedido explícito: "si el
+                            // conductor acepta, cambiar a la ruta con paso a
+                            // nivel", así que se lo dejamos elegir a él.
+                            RouteChoiceCard(
+                                label = "🛡️ Recomendada — evita un túnel/calle angosta",
+                                route = state.routeOptions.recommended,
+                                selected = !state.useDirectRoute,
+                                onClick = { onRouteChoiceSelected(false) },
+                            )
+                            RouteChoiceCard(
+                                label = "⚡ Directa — por el túnel, solo si tu vehículo entra",
+                                route = direct,
+                                selected = state.useDirectRoute,
+                                onClick = { onRouteChoiceSelected(true) },
+                            )
+                        } else {
+                            Text(
+                                text = "${state.routeOptions.recommended.durationMinutes} min · " +
+                                    formatDistance(state.routeOptions.recommended.distanceMeters),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = RedUrbanaColors.TextPrimary,
+                            )
+                        }
+                        state.activeRoute?.let { route ->
+                            if (route.unavoidableViolations.isNotEmpty()) {
+                                UnavoidableViolationWarning(violations = route.unavoidableViolations)
+                            }
                         }
                         Button(
-                            onClick = { onStartDriving(state.destination, state.destinationName, vehicleProfile) },
+                            onClick = { onStartDriving(state.destination, state.destinationName, vehicleProfile, state.useDirectRoute) },
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text("Comenzar viaje")
@@ -879,6 +906,39 @@ private fun defaultDimensionsFor(category: VehicleCategory): VehicleDimensions =
     VehicleCategory.AMBULANCE -> VehicleDimensions(heightMeters = 2.8, widthMeters = 2.2, weightTons = 4.5)
     VehicleCategory.FIRE_TRUCK -> VehicleDimensions(heightMeters = 3.8, widthMeters = 2.5, weightTons = 15.0)
     else -> VehicleDimensions(heightMeters = 1.6, widthMeters = 1.9, weightTons = 2.5)
+}
+
+/**
+ * Una de las dos opciones cuando evitar un túnel/restricción de verdad
+ * cambia la ruta — pedido explícito: "que el conductor elija" en vez de que
+ * la app decida sola siempre por la segura. Tocar la tarjeta selecciona esa
+ * ruta (se dibuja en el mapa y es la que arranca con "Comenzar viaje"), no
+ * hay un botón de confirmar aparte.
+ */
+@Composable
+private fun RouteChoiceCard(label: String, route: DrivingRoute, selected: Boolean, onClick: () -> Unit) {
+    GlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        contentPadding = PaddingValues(12.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column {
+                Text(text = label, style = MaterialTheme.typography.bodyMedium, color = RedUrbanaColors.TextPrimary)
+                Text(
+                    text = "${route.durationMinutes} min · ${formatDistance(route.distanceMeters)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = RedUrbanaColors.TextSecondary,
+                )
+            }
+            androidx.compose.material3.RadioButton(selected = selected, onClick = onClick)
+        }
+    }
 }
 
 /**

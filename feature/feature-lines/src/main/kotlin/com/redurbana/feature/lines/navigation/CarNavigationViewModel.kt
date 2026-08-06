@@ -128,6 +128,20 @@ class CarNavigationViewModel @Inject constructor(
         VehicleProfile(category = category, dimensions = dimensions)
     }
 
+    /**
+     * Si el conductor eligió la ruta "directa" en el sheet de ExploreMapScreen
+     * (ver DrivingRouteOptions), la navegación tiene que seguir pidiendo esa
+     * MISMA variante en cada recálculo por desvío — no tiene sentido
+     * volver a preguntar a mitad de un viaje ya empezado. Se logra pidiendo
+     * sin medidas (mismo resultado que en la vista previa: sin dimensiones,
+     * Mapbox no aplica max_height/width/weight ni exclude=tunnel) — la
+     * categoría real (para el ícono del puck) sigue siendo [vehicleProfile].
+     */
+    private val routingVehicleProfile: VehicleProfile = run {
+        val useDirectRoute = savedStateHandle.get<Boolean>("useDirectRoute") ?: false
+        if (useDirectRoute) vehicleProfile.copy(dimensions = null) else vehicleProfile
+    }
+
     private val _uiState = MutableStateFlow<CarNavigationUiState>(CarNavigationUiState.Loading)
     val uiState: StateFlow<CarNavigationUiState> = _uiState.asStateFlow()
 
@@ -197,7 +211,7 @@ class CarNavigationViewModel @Inject constructor(
 
     private suspend fun requestRoute(origin: GeoPoint) {
         _uiState.value = CarNavigationUiState.Loading
-        getDrivingRoute(origin, destination, vehicleProfile)
+        getDrivingRoute(origin, destination, routingVehicleProfile)
             .onSuccess { route ->
                 offRouteStreak = 0
                 announced.clear()

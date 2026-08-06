@@ -10,12 +10,13 @@ import com.redurbana.domain.crowdsourcing.model.LiveDriverPosition
 import com.redurbana.domain.crowdsourcing.usecase.ObserveNearbyLiveDriversUseCase
 import com.redurbana.domain.transport.GeoBounds
 import com.redurbana.domain.transport.model.DrivingRoute
+import com.redurbana.domain.transport.model.DrivingRouteOptions
 import com.redurbana.domain.transport.model.GeoPoint
 import com.redurbana.domain.transport.model.TripItinerary
 import com.redurbana.domain.transport.model.VehicleCategory
 import com.redurbana.domain.transport.model.VehicleDimensions
 import com.redurbana.domain.transport.model.VehicleProfile
-import com.redurbana.domain.transport.usecase.GetDrivingRouteUseCase
+import com.redurbana.domain.transport.usecase.GetAlternativeDrivingRoutesUseCase
 import com.redurbana.domain.transport.usecase.GetTripItinerariesUseCase
 import com.redurbana.domain.transport.usecase.ObserveActiveVehicleUseCase
 import com.redurbana.domain.transport.usecase.ObserveSavedVehiclesUseCase
@@ -60,14 +61,24 @@ sealed interface ExploreUiState {
 
     data class ItineraryDetail(val itinerary: TripItinerary, val previous: Recommending) : ExploreUiState
 
-    /** Modo Auto: sin lista de alternativas ni transbordos, una sola ruta real manejando. */
+    /**
+     * Modo Auto: sin lista de alternativas ni transbordos, hasta dos rutas
+     * reales manejando (ver [DrivingRouteOptions]) — [routeOptions.direct]
+     * viene no-null solo cuando de verdad hay una alternativa por túnel/calle
+     * angosta que evitar, y ahí [useDirectRoute] guarda cuál de las dos
+     * eligió el conductor para dibujar y arrancar.
+     */
     data class DrivingResult(
         val destination: GeoPoint,
         val destinationName: String,
-        val route: DrivingRoute? = null,
+        val routeOptions: DrivingRouteOptions? = null,
+        val useDirectRoute: Boolean = false,
         val isLoading: Boolean = false,
         val error: String? = null,
-    ) : ExploreUiState
+    ) : ExploreUiState {
+        val activeRoute: DrivingRoute?
+            get() = if (useDirectRoute) routeOptions?.direct else routeOptions?.recommended
+    }
 }
 
 private const val NEARBY_DRIVERS_RADIUS_METERS = 3_000.0
@@ -76,7 +87,7 @@ private const val NEARBY_DRIVERS_RADIUS_METERS = 3_000.0
 class ExploreViewModel @Inject constructor(
     private val destinationSearchClient: DestinationSearchClient,
     private val getTripItineraries: GetTripItinerariesUseCase,
-    private val getDrivingRoute: GetDrivingRouteUseCase,
+    private val getAlternativeDrivingRoutes: GetAlternativeDrivingRoutesUseCase,
     private val locationSource: DeviceLocationSource,
     private val observeNearbyLiveDrivers: ObserveNearbyLiveDriversUseCase,
     observeSavedVehicles: ObserveSavedVehiclesUseCase,
@@ -344,12 +355,12 @@ class ExploreViewModel @Inject constructor(
                 destinationName = current.placeName,
                 isLoading = true,
             )
-            getDrivingRoute(origin, current.point, vehicleProfile.value)
-                .onSuccess { route ->
+            getAlternativeDrivingRoutes(origin, current.point, vehicleProfile.value)
+                .onSuccess { options ->
                     _uiState.value = ExploreUiState.DrivingResult(
                         destination = current.point,
                         destinationName = current.placeName,
-                        route = route,
+                        routeOptions = options,
                         isLoading = false,
                     )
                 }
@@ -362,6 +373,12 @@ class ExploreViewModel @Inject constructor(
                     )
                 }
         }
+    }
+
+    /** El conductor eligió entre la ruta recomendada (evita túneles/restricciones) y la directa — pedido explícito: "si acepta, cambiar la ruta". */
+    fun onRouteChoiceSelected(useDirectRoute: Boolean) {
+        val current = _uiState.value as? ExploreUiState.DrivingResult ?: return
+        _uiState.value = current.copy(useDirectRoute = useDirectRoute)
     }
 
     fun onCancelDestination() {

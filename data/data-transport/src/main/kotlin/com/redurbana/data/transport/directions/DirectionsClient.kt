@@ -3,6 +3,7 @@ package com.redurbana.data.transport.directions
 import android.content.Context
 import com.redurbana.domain.transport.DirectionsProvider
 import com.redurbana.domain.transport.model.DrivingRoute
+import com.redurbana.domain.transport.model.DrivingRouteOptions
 import com.redurbana.domain.transport.model.GeoPoint
 import com.redurbana.domain.transport.model.RouteRestrictionViolation
 import com.redurbana.domain.transport.model.RouteStep
@@ -206,13 +207,49 @@ class DirectionsClient @Inject constructor(
         destination: GeoPoint,
         vehicleProfile: VehicleProfile,
     ): Result<DrivingRoute> =
-        route(origin, destination, DirectionsProfile.DRIVING, withSteps = true, dimensions = vehicleProfile.dimensions).map {
-            DrivingRoute(
-                distanceMeters = it.distanceMeters,
-                durationMinutes = it.durationMinutes,
-                polyline = it.polyline,
-                steps = it.steps,
-                unavoidableViolations = it.unavoidableViolations,
-            )
+        route(origin, destination, DirectionsProfile.DRIVING, withSteps = true, dimensions = vehicleProfile.dimensions)
+            .map { it.toDrivingRoute() }
+
+    /**
+     * Reporte de campo: "si el conductor acepta, la app debe cambiar la
+     * ruta" — para eso hace falta tener las dos rutas armadas de antemano,
+     * no solo la segura. Pide la recomendada (con restricciones) siempre;
+     * la directa (sin restricciones) SOLO si el vehículo tiene medidas
+     * configuradas — para auto/moto/camioneta/patrulla sería una llamada
+     * de más que nunca se va a usar, porque `direct` va a terminar en null.
+     */
+    override suspend fun getAlternativeDrivingRoutes(
+        origin: GeoPoint,
+        destination: GeoPoint,
+        vehicleProfile: VehicleProfile,
+    ): Result<DrivingRouteOptions> {
+        val recommendedResult = route(origin, destination, DirectionsProfile.DRIVING, withSteps = true, dimensions = vehicleProfile.dimensions)
+        val recommended = recommendedResult.getOrElse { return Result.failure(it) }
+
+        if (vehicleProfile.dimensions == null) {
+            return Result.success(DrivingRouteOptions(recommended = recommended.toDrivingRoute()))
         }
+
+        val direct = route(origin, destination, DirectionsProfile.DRIVING, withSteps = true, dimensions = null).getOrNull()
+        // Umbral de 150m: separa una diferencia real de ruta (evitó el túnel
+        // de verdad, tomó otra calle) del ruido normal entre dos pedidos
+        // independientes al mismo motor de ruteo (redondeos, variación
+        // menor por tráfico en vivo entre una llamada y la otra).
+        val differsMeaningfully = direct != null && kotlin.math.abs(direct.distanceMeters - recommended.distanceMeters) > 150.0
+
+        return Result.success(
+            DrivingRouteOptions(
+                recommended = recommended.toDrivingRoute(),
+                direct = if (differsMeaningfully) direct?.toDrivingRoute() else null,
+            ),
+        )
+    }
+
+    private fun MapboxRoute.toDrivingRoute() = DrivingRoute(
+        distanceMeters = distanceMeters,
+        durationMinutes = durationMinutes,
+        polyline = polyline,
+        steps = steps,
+        unavoidableViolations = unavoidableViolations,
+    )
 }

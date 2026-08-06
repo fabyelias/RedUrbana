@@ -81,6 +81,13 @@ sealed interface AppRoute {
      * [vehicleWidthMeters] vacíos ("") = sin dimensiones cargadas (autos,
      * motos, camionetas, patrulleros no las necesitan — ver
      * `VehicleCategory.requiresDimensions`).
+     *
+     * [useDirectRoute]: cuando ExploreMapScreen ofreció dos rutas (directa
+     * por un túnel vs. recomendada por un paso a nivel — ver
+     * DrivingRouteOptions) y el conductor eligió la directa, esto viaja para
+     * que CarNavigationViewModel siga pidiendo esa MISMA variante en cada
+     * recálculo por desvío — no tiene sentido re-ofrecer la elección a mitad
+     * de un viaje ya empezado.
      */
     @Serializable
     data class CarNavigation(
@@ -91,5 +98,6 @@ sealed interface AppRoute {
         val vehicleHeightMeters: String = "",
         val vehicleWidthMeters: String = "",
         val vehicleWeightTons: String = "",
+        val useDirectRoute: Boolean = false,
     ) : AppRoute
 }
