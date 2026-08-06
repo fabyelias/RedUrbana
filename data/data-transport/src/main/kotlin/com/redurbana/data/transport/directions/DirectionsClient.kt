@@ -4,6 +4,7 @@ import android.content.Context
 import com.redurbana.domain.transport.DirectionsProvider
 import com.redurbana.domain.transport.model.DrivingRoute
 import com.redurbana.domain.transport.model.GeoPoint
+import com.redurbana.domain.transport.model.RouteRestrictionViolation
 import com.redurbana.domain.transport.model.RouteStep
 import com.redurbana.domain.transport.model.VehicleDimensions
 import com.redurbana.domain.transport.model.VehicleProfile
@@ -33,6 +34,7 @@ data class MapboxRoute(
     val durationMinutes: Int,
     val polyline: List<GeoPoint>,
     val steps: List<RouteStep> = emptyList(),
+    val unavoidableViolations: Set<RouteRestrictionViolation> = emptySet(),
 )
 
 @Serializable
@@ -50,7 +52,20 @@ private data class DirectionsRouteDto(
 private data class DirectionsGeometryDto(val coordinates: List<List<Double>>)
 
 @Serializable
-private data class DirectionsLegDto(val steps: List<DirectionsStepDto> = emptyList())
+private data class DirectionsLegDto(
+    val steps: List<DirectionsStepDto> = emptyList(),
+    // Mapbox informa acá cuándo NO pudo respetar algo que pedimos (max_height,
+    // max_width, max_weight, exclude=tunnel) porque no había otra forma real
+    // de llegar al destino — "mejor esfuerzo", documentado por Mapbox mismo.
+    // Viene en la respuesta por defecto, sin pedir ningún parámetro extra.
+    val notifications: List<NotificationDto> = emptyList(),
+)
+
+@Serializable
+private data class NotificationDto(
+    val type: String,
+    val subtype: String? = null,
+)
 
 @Serializable
 private data class DirectionsStepDto(
@@ -152,9 +167,29 @@ class DirectionsClient @Inject constructor(
                     durationMinutes = (route.duration / 60.0).roundToInt().coerceAtLeast(1),
                     polyline = route.geometry.coordinates.map { GeoPoint(latitude = it[1], longitude = it[0]) },
                     steps = route.legs.flatMap { leg -> leg.steps.map { it.toRouteStep() } },
+                    unavoidableViolations = route.legs.flatMap { it.notifications }.mapNotNullTo(mutableSetOf()) { it.toViolationOrNull() },
                 )
             }
         }
+
+    /**
+     * `type == "violation"` es lo que Mapbox usa para "pediste evitar esto y
+     * no pude" (a diferencia de `"alert"`, que es informativo — cruzó un
+     * túnel a propósito porque no lo habíamos excluido). Nombres de subtype
+     * (`"tunnel"`, `"maxHeight"`, etc.) confirmados contra el SDK real de
+     * Mapbox (mapbox-java DirectionsCriteria), no en la documentación
+     * pública, que no los detalla.
+     */
+    private fun NotificationDto.toViolationOrNull(): RouteRestrictionViolation? {
+        if (type != "violation") return null
+        return when (subtype) {
+            "tunnel" -> RouteRestrictionViolation.TUNNEL
+            "maxHeight" -> RouteRestrictionViolation.MAX_HEIGHT
+            "maxWidth" -> RouteRestrictionViolation.MAX_WIDTH
+            "maxWeight" -> RouteRestrictionViolation.MAX_WEIGHT
+            else -> null
+        }
+    }
 
     private fun DirectionsStepDto.toRouteStep() = RouteStep(
         instruction = maneuver.instruction,
@@ -172,6 +207,12 @@ class DirectionsClient @Inject constructor(
         vehicleProfile: VehicleProfile,
     ): Result<DrivingRoute> =
         route(origin, destination, DirectionsProfile.DRIVING, withSteps = true, dimensions = vehicleProfile.dimensions).map {
-            DrivingRoute(distanceMeters = it.distanceMeters, durationMinutes = it.durationMinutes, polyline = it.polyline, steps = it.steps)
+            DrivingRoute(
+                distanceMeters = it.distanceMeters,
+                durationMinutes = it.durationMinutes,
+                polyline = it.polyline,
+                steps = it.steps,
+                unavoidableViolations = it.unavoidableViolations,
+            )
         }
 }

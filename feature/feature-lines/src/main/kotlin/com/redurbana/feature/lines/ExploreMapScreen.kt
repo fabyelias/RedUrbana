@@ -74,6 +74,7 @@ import com.redurbana.core.ui.theme.LineColorProvider
 import com.redurbana.core.ui.theme.RedUrbanaColors
 import com.redurbana.domain.crowdsourcing.model.LiveDriverPosition
 import com.redurbana.domain.transport.model.GeoPoint
+import com.redurbana.domain.transport.model.RouteRestrictionViolation
 import com.redurbana.domain.transport.model.Stop
 import com.redurbana.domain.transport.model.TripItinerary
 import com.redurbana.domain.transport.model.TripLeg
@@ -587,6 +588,9 @@ private fun ExploreSheetContent(
                             style = MaterialTheme.typography.titleMedium,
                             color = RedUrbanaColors.TextPrimary,
                         )
+                        if (state.route.unavoidableViolations.isNotEmpty()) {
+                            UnavoidableViolationWarning(violations = state.route.unavoidableViolations)
+                        }
                         Button(
                             onClick = { onStartDriving(state.destination, state.destinationName, vehicleProfile) },
                             modifier = Modifier.fillMaxWidth(),
@@ -875,6 +879,38 @@ private fun defaultDimensionsFor(category: VehicleCategory): VehicleDimensions =
     VehicleCategory.AMBULANCE -> VehicleDimensions(heightMeters = 2.8, widthMeters = 2.2, weightTons = 4.5)
     VehicleCategory.FIRE_TRUCK -> VehicleDimensions(heightMeters = 3.8, widthMeters = 2.5, weightTons = 15.0)
     else -> VehicleDimensions(heightMeters = 1.6, widthMeters = 1.9, weightTons = 2.5)
+}
+
+/**
+ * Mapbox pide evitar túneles/calles con restricción de medida para este
+ * vehículo (ver DirectionsClient), pero es "mejor esfuerzo": si no había
+ * otra forma real de llegar al destino, la ruta terminó cruzando algo que
+ * pedimos evitar. Mapbox lo informa solo (campo `notifications` de la
+ * respuesta) — esto es lo que hace visible ese aviso en vez de que pase
+ * silencioso. No hay botón de "recalcular evitando esto": Mapbox ya lo
+ * intentó y no encontró otra forma, así que insistir no cambiaría nada.
+ */
+@Composable
+private fun UnavoidableViolationWarning(violations: Set<RouteRestrictionViolation>) {
+    GlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(12.dp),
+    ) {
+        Text(
+            text = "⚠️ Esta ruta tuvo que pasar por ${violations.joinToString(" y ") { it.warningLabel() }} " +
+                "porque no encontramos otra forma de llegar. Circulá con precaución — si conocés un cruce " +
+                "alternativo (por ejemplo un paso a nivel), puede ser más seguro.",
+            style = MaterialTheme.typography.bodySmall,
+            color = RedUrbanaColors.AlertRed,
+        )
+    }
+}
+
+private fun RouteRestrictionViolation.warningLabel(): String = when (this) {
+    RouteRestrictionViolation.TUNNEL -> "un túnel"
+    RouteRestrictionViolation.MAX_HEIGHT -> "una calle con restricción de altura"
+    RouteRestrictionViolation.MAX_WIDTH -> "una calle con restricción de ancho"
+    RouteRestrictionViolation.MAX_WEIGHT -> "una calle con restricción de peso"
 }
 
 @Composable

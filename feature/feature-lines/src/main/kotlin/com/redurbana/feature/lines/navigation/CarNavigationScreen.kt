@@ -50,6 +50,7 @@ import com.mapbox.maps.plugin.viewport.data.FollowPuckViewportStateOptions
 import com.redurbana.core.ui.components.GlassCard
 import com.redurbana.core.ui.theme.RedUrbanaColors
 import com.redurbana.domain.transport.model.GeoPoint
+import com.redurbana.domain.transport.model.RouteRestrictionViolation
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -250,8 +251,25 @@ private fun NavInstructionBanner(state: CarNavigationUiState.Active, modifier: M
                 style = MaterialTheme.typography.titleMedium,
                 color = RedUrbanaColors.TextPrimary,
             )
+            // Mismo aviso que ExploreMapScreen muestra antes de arrancar —
+            // se repite acá por si el viaje es largo y conviene recordarlo,
+            // no solo verlo una vez al elegir destino.
+            if (state.route.unavoidableViolations.isNotEmpty()) {
+                Text(
+                    text = "⚠️ Esta ruta cruza ${state.route.unavoidableViolations.joinToString(" y ") { it.warningLabel() }} que no pudimos evitar",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = RedUrbanaColors.AlertRed,
+                )
+            }
         }
     }
+}
+
+private fun RouteRestrictionViolation.warningLabel(): String = when (this) {
+    RouteRestrictionViolation.TUNNEL -> "un túnel"
+    RouteRestrictionViolation.MAX_HEIGHT -> "una calle con restricción de altura"
+    RouteRestrictionViolation.MAX_WIDTH -> "una calle con restricción de ancho"
+    RouteRestrictionViolation.MAX_WEIGHT -> "una calle con restricción de peso"
 }
 
 @Composable

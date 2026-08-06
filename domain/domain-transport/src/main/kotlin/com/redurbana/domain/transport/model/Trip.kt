@@ -58,7 +58,19 @@ data class DrivingRoute(
     val polyline: List<GeoPoint>,
     /** Vacío salvo que se haya pedido con instrucciones de giro (navegación paso a paso) — ver [RouteStep]. */
     val steps: List<RouteStep> = emptyList(),
+    /**
+     * Restricciones que esta ruta NO pudo evitar pese a haberlas pedido
+     * (max_height/width/weight, exclude=tunnel — ver DirectionsClient) porque
+     * no había otra forma real de llegar al destino. Mapbox lo reporta él
+     * mismo en la respuesta (`notifications`), no es algo que este código
+     * infiera — reporte de campo: un túnel real de altura desconocida no fue
+     * evitado, y esto es lo que permite avisarlo en vez de que pase
+     * silencioso.
+     */
+    val unavoidableViolations: Set<RouteRestrictionViolation> = emptySet(),
 )
+
+enum class RouteRestrictionViolation { TUNNEL, MAX_HEIGHT, MAX_WIDTH, MAX_WEIGHT }
 
 /**
  * Un tramo entre dos maniobras consecutivas de una [DrivingRoute] (ej. "girá
