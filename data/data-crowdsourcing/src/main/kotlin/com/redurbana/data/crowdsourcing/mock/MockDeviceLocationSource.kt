@@ -23,7 +23,7 @@ import javax.inject.Singleton
 @Singleton
 class MockDeviceLocationSource @Inject constructor() : DeviceLocationSource {
 
-    override fun observeLocation(intervalMs: Long): Flow<RawLocationSample> = flow {
+    override fun observeLocation(intervalMs: Long, highAccuracy: Boolean): Flow<RawLocationSample> = flow {
         var lat = -34.6095
         var lng = -58.3924
         var tick = 0

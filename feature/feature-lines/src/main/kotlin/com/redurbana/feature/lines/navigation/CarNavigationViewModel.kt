@@ -41,6 +41,13 @@ sealed interface CarNavigationUiState {
 }
 
 private const val NAV_POLL_INTERVAL_MS = 1_000L
+// 30m y 3 fixes seguidos (~3s): con PRIORITY_HIGH_ACCURACY (ver más abajo,
+// observeLocation(highAccuracy = true)) el error típico de un fix de GPS
+// real es de unos pocos metros, no los 50m+ que daba la prioridad
+// balanceada por red que usa el resto de la app — el umbral más ancho que
+// había antes (50m/5) era para compensar ESA imprecisión, y de paso hacía
+// que la app tardara mucho en darse cuenta de un desvío real (reporte de
+// campo: "recalcula muy tarde").
 private const val OFF_ROUTE_THRESHOLD_METERS = 30.0
 private const val OFF_ROUTE_CONSECUTIVE_FIXES = 3
 private const val VOICE_FAR_THRESHOLD_METERS = 300.0
@@ -49,11 +56,16 @@ private const val VOICE_NEAR_THRESHOLD_METERS = 50.0
 /**
  * Sondea el GPS cada 1s (no los 5s por defecto del resto de la app — acá
  * hace falta esa frecuencia para que la cámara/velocidad/detección de
- * desvío se sientan en vivo) y deriva de eso: en qué tramo va, cuánto falta
- * para el próximo giro, si se salió de la ruta trazada, y cuándo avisar por
- * voz. `GetDrivingRouteUseCase` es el mismo que ya usa
- * ExploreViewModel.confirmDriving — acá se reinvoca cada vez que hace falta
- * recalcular, con el origen actualizado a la posición real.
+ * desvío se sientan en vivo) con `highAccuracy = true` (PRIORITY_HIGH_ACCURACY
+ * real, no la prioridad balanceada por red que usa el resto de la app —
+ * reporte de campo: manejando por Panamericana el punto azul aparecía en la
+ * mano contraria, la velocidad no se calculaba y los avisos de voz llegaban
+ * minutos tarde, todo consistente con estar usando ubicación por red en vez
+ * de GPS real) y deriva de eso: en qué tramo va, cuánto falta para el
+ * próximo giro, si se salió de la ruta trazada, y cuándo avisar por voz.
+ * `GetDrivingRouteUseCase` es el mismo que ya usa ExploreViewModel.confirmDriving
+ * — acá se reinvoca cada vez que hace falta recalcular, con el origen
+ * actualizado a la posición real.
  */
 @HiltViewModel
 class CarNavigationViewModel @Inject constructor(
@@ -86,7 +98,7 @@ class CarNavigationViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             var hasRequestedInitialRoute = false
-            locationSource.observeLocation(intervalMs = NAV_POLL_INTERVAL_MS).collect { sample ->
+            locationSource.observeLocation(intervalMs = NAV_POLL_INTERVAL_MS, highAccuracy = true).collect { sample ->
                 val point = GeoPoint(sample.latitude, sample.longitude)
                 val navPosition = NavPosition(
                     point = point,

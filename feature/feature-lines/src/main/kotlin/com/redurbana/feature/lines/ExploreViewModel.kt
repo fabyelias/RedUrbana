@@ -3,6 +3,7 @@ package com.redurbana.feature.lines
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mapbox.geojson.Point
+import com.mapbox.search.result.SearchSuggestion
 import com.redurbana.core.location.DeviceLocationSource
 import com.redurbana.domain.transport.model.DrivingRoute
 import com.redurbana.domain.transport.model.GeoPoint
@@ -10,6 +11,8 @@ import com.redurbana.domain.transport.model.TripItinerary
 import com.redurbana.domain.transport.usecase.GetDrivingRouteUseCase
 import com.redurbana.domain.transport.usecase.GetTripItinerariesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -68,6 +71,65 @@ class ExploreViewModel @Inject constructor(
 
     fun onTravelModeSelected(mode: TravelMode) {
         _travelMode.value = mode
+    }
+
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    private val _searchSuggestions = MutableStateFlow<List<SearchSuggestion>>(emptyList())
+    val searchSuggestions: StateFlow<List<SearchSuggestion>> = _searchSuggestions.asStateFlow()
+
+    private val _isSearching = MutableStateFlow(false)
+    val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
+
+    private var searchJob: Job? = null
+
+    /**
+     * Debounce manual (300ms): sin esto cada letra tipeada dispara un
+     * request — cancela el anterior con searchJob así solo el último
+     * query en pie termina pisando las sugerencias.
+     */
+    fun onSearchQueryChanged(query: String) {
+        _searchQuery.value = query
+        searchJob?.cancel()
+        if (query.isBlank()) {
+            _searchSuggestions.value = emptyList()
+            _isSearching.value = false
+            return
+        }
+        searchJob = viewModelScope.launch {
+            delay(300)
+            _isSearching.value = true
+            val proximity = _liveLocation.value?.let { Point.fromLngLat(it.longitude, it.latitude) }
+            destinationSearchClient.searchSuggestions(query, proximity)
+                .onSuccess { suggestions -> _searchSuggestions.value = suggestions }
+                .onFailure { _searchSuggestions.value = emptyList() }
+            _isSearching.value = false
+        }
+    }
+
+    fun onSearchSuggestionSelected(suggestion: SearchSuggestion) {
+        searchJob?.cancel()
+        _searchQuery.value = ""
+        _searchSuggestions.value = emptyList()
+        viewModelScope.launch {
+            destinationSearchClient.selectSuggestion(suggestion)
+                .onSuccess { result ->
+                    val coordinate = result.coordinate
+                    val point = GeoPoint(latitude = coordinate.latitude(), longitude = coordinate.longitude())
+                    _uiState.value = ExploreUiState.ConfirmingDestination(
+                        point = point,
+                        placeName = result.name,
+                    )
+                }
+        }
+    }
+
+    fun onSearchCleared() {
+        searchJob?.cancel()
+        _searchQuery.value = ""
+        _searchSuggestions.value = emptyList()
+        _isSearching.value = false
     }
 
     /**

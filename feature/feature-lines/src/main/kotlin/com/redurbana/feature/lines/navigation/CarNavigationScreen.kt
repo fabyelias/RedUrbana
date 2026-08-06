@@ -24,6 +24,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.mapbox.geojson.LineString
+import com.mapbox.geojson.Point
+import com.mapbox.maps.MapboxMap
 import com.mapbox.maps.extension.compose.MapEffect
 import com.mapbox.maps.extension.compose.MapboxMap as MapboxMapComposable
 import com.mapbox.maps.extension.compose.animation.viewport.rememberMapViewportState
@@ -31,6 +34,12 @@ import com.mapbox.maps.extension.compose.style.BooleanValue
 import com.mapbox.maps.extension.compose.style.standard.LightPresetValue
 import com.mapbox.maps.extension.compose.style.standard.MapboxStandardStyle
 import com.mapbox.maps.extension.compose.style.standard.rememberStandardStyleState
+import com.mapbox.maps.extension.style.layers.addLayer
+import com.mapbox.maps.extension.style.layers.generated.lineLayer
+import com.mapbox.maps.extension.style.layers.properties.generated.LineCap
+import com.mapbox.maps.extension.style.layers.properties.generated.LineJoin
+import com.mapbox.maps.extension.style.sources.addSource
+import com.mapbox.maps.extension.style.sources.generated.geoJsonSource
 import com.mapbox.maps.plugin.PuckBearing
 import com.mapbox.maps.plugin.locationcomponent.createDefault2DPuck
 import com.mapbox.maps.plugin.locationcomponent.location
@@ -38,6 +47,7 @@ import com.mapbox.maps.plugin.viewport.data.FollowPuckViewportStateBearing
 import com.mapbox.maps.plugin.viewport.data.FollowPuckViewportStateOptions
 import com.redurbana.core.ui.components.GlassCard
 import com.redurbana.core.ui.theme.RedUrbanaColors
+import com.redurbana.domain.transport.model.GeoPoint
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -101,6 +111,19 @@ fun CarNavigationScreen(
         }
     }
 
+    var nativeMap by remember { mutableStateOf<MapboxMap?>(null) }
+
+    // La ruta dibujada en el mapa: antes faltaba por completo acá (solo se
+    // veía el punto siguiéndote, sin ninguna línea) — capa NATIVA de Mapbox,
+    // no Canvas, por la misma razón que en ExploreMapScreen: se reproyecta
+    // sola en cada frame, nunca se desincroniza del mapa. Se re-dibuja cada
+    // vez que cambia la ruta, incluido cuando se recalcula por desvío.
+    LaunchedEffect((uiState as? CarNavigationUiState.Active)?.route, nativeMap) {
+        val map = nativeMap ?: return@LaunchedEffect
+        val polyline = (uiState as? CarNavigationUiState.Active)?.route?.polyline
+        updateDrivingRouteLayer(map, polyline)
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
         MapboxMapComposable(
             modifier = Modifier.fillMaxSize(),
@@ -108,6 +131,7 @@ fun CarNavigationScreen(
             style = { MapboxStandardStyle(standardStyleState = standardStyleState) },
         ) {
             MapEffect(Unit) { mapView ->
+                nativeMap = mapView.mapboxMap
                 // Puck nativo de Mapbox (no el Canvas a mano que usan las
                 // otras pantallas): transitionToFollowPuckState necesita
                 // este puck real para seguirlo y rotarlo con el rumbo.
@@ -249,3 +273,26 @@ private fun NavBottomBar(state: CarNavigationUiState.Active, speedKmh: Int?, mod
 
 private fun formatDistance(meters: Double): String =
     if (meters >= 1000) "${(meters / 100).roundToInt() / 10.0} km" else "${meters.roundToInt()} m"
+
+private const val NAV_ROUTE_SOURCE_ID = "redurbana-nav-route"
+private const val NAV_ROUTE_LAYER_ID = "redurbana-nav-route-layer"
+
+/** Mismo mecanismo que ExploreMapScreen.updateDrivingRouteLayer — ver el comentario ahí para el porqué de la capa nativa en vez de Canvas. */
+private fun updateDrivingRouteLayer(map: MapboxMap, polyline: List<GeoPoint>?) {
+    if (map.styleLayerExists(NAV_ROUTE_LAYER_ID)) map.removeStyleLayer(NAV_ROUTE_LAYER_ID)
+    if (map.styleSourceExists(NAV_ROUTE_SOURCE_ID)) map.removeStyleSource(NAV_ROUTE_SOURCE_ID)
+
+    if (polyline == null || polyline.size < 2) return
+
+    val lineString = LineString.fromLngLats(polyline.map { Point.fromLngLat(it.longitude, it.latitude) })
+    map.addSource(geoJsonSource(NAV_ROUTE_SOURCE_ID) { geometry(lineString) })
+    map.addLayer(
+        lineLayer(NAV_ROUTE_LAYER_ID, NAV_ROUTE_SOURCE_ID) {
+            lineWidth(6.0)
+            lineColor(android.graphics.Color.parseColor("#3B82F6")) // RedUrbanaColors.AccentBlue
+            lineCap(LineCap.ROUND)
+            lineJoin(LineJoin.ROUND)
+            slot("middle")
+        },
+    )
+}

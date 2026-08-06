@@ -24,6 +24,13 @@ interface DeviceLocationSource {
      * Stream de ubicaciones mientras haya un colector activo. Implica que
      * el permiso de ubicación ya fue otorgado — llamarlo sin permiso debe
      * fallar el Flow, no crashear.
+     *
+     * [highAccuracy] pide PRIORITY_HIGH_ACCURACY (depende del chip GPS) en
+     * vez de la prioridad balanceada por defecto (acepta red/WiFi, mismo
+     * motivo que el resto de la app — ver FusedDeviceLocationSource). Solo
+     * hace falta en true para navegación paso a paso manejando: ahí sí hace
+     * falta precisión de carril y velocidad/rumbo reales, algo que la
+     * ubicación por red no puede dar.
      */
-    fun observeLocation(intervalMs: Long = 5_000): Flow<RawLocationSample>
+    fun observeLocation(intervalMs: Long = 5_000, highAccuracy: Boolean = false): Flow<RawLocationSample>
 }

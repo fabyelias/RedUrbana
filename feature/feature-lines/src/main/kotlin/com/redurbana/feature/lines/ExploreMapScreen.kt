@@ -22,6 +22,8 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.mapbox.geojson.LineString
 import com.mapbox.geojson.Point
 import com.mapbox.maps.EdgeInsets
 import com.mapbox.maps.MapboxMap
@@ -50,10 +53,14 @@ import com.mapbox.maps.extension.compose.style.standard.rememberStandardStyleSta
 import com.mapbox.maps.extension.style.expressions.generated.Expression
 import com.mapbox.maps.extension.style.layers.addLayer
 import com.mapbox.maps.extension.style.layers.generated.lineLayer
+import com.mapbox.maps.extension.style.layers.properties.generated.LineCap
+import com.mapbox.maps.extension.style.layers.properties.generated.LineJoin
 import com.mapbox.maps.extension.style.sources.addSource
+import com.mapbox.maps.extension.style.sources.generated.geoJsonSource
 import com.mapbox.maps.extension.style.sources.generated.vectorSource
 import com.mapbox.maps.plugin.animation.MapAnimationOptions
 import com.mapbox.maps.plugin.gestures.addOnMapClickListener
+import com.mapbox.search.result.SearchSuggestion
 import com.redurbana.core.ui.components.GlassCard
 import com.redurbana.core.ui.components.RouteBadge
 import com.redurbana.core.ui.theme.LineColorProvider
@@ -90,6 +97,9 @@ fun ExploreMapScreen(
     val uiState by viewModel.uiState.collectAsState()
     val liveLocation by viewModel.liveLocation.collectAsState()
     val travelMode by viewModel.travelMode.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    val searchSuggestions by viewModel.searchSuggestions.collectAsState()
+    val isSearching by viewModel.isSearching.collectAsState()
     val scaffoldState = rememberBottomSheetScaffoldState()
 
     var nativeMap by remember { mutableStateOf<MapboxMap?>(null) }
@@ -133,6 +143,20 @@ fun ExploreMapScreen(
         )
     }
 
+    // Un resultado de búsqueda por texto puede estar en cualquier lado del
+    // mapa (a diferencia de tocar el mapa, donde el punto ya está a la
+    // vista) — centrar la cámara ahí para que el pin aparezca en pantalla.
+    LaunchedEffect((uiState as? ExploreUiState.ConfirmingDestination)?.point) {
+        val point = (uiState as? ExploreUiState.ConfirmingDestination)?.point ?: return@LaunchedEffect
+        mapViewportState.flyTo(
+            cameraOptions = com.mapbox.maps.CameraOptions.Builder()
+                .center(Point.fromLngLat(point.longitude, point.latitude))
+                .zoom(15.5)
+                .build(),
+            animationOptions = MapAnimationOptions.mapAnimationOptions { duration(600) },
+        )
+    }
+
     // Al mostrar el detalle de un itinerario (colectivo) o una ruta en auto,
     // ajustar la cámara a los bounds del recorrido.
     LaunchedEffect(uiState, nativeMap) {
@@ -150,6 +174,17 @@ fun ExploreMapScreen(
                 animationOptions = MapAnimationOptions.mapAnimationOptions { duration(600) },
             )
         }
+    }
+
+    // La ruta en auto se dibuja con una capa NATIVA de Mapbox (igual que el
+    // tráfico más abajo), no con un Canvas a mano: una capa nativa se
+    // reproyecta sola en cada frame, así que nunca se puede "despegar" del
+    // mapa al panear — que es justo lo que le pasaba a la versión anterior
+    // dibujada en Canvas.
+    LaunchedEffect((uiState as? ExploreUiState.DrivingResult)?.route, nativeMap) {
+        val map = nativeMap ?: return@LaunchedEffect
+        val polyline = (uiState as? ExploreUiState.DrivingResult)?.route?.polyline
+        updateDrivingRouteLayer(map, polyline)
     }
 
     BottomSheetScaffold(
@@ -197,6 +232,23 @@ fun ExploreMapScreen(
                 cameraTick = cameraTick,
                 modifier = Modifier.fillMaxSize(),
             )
+
+            // Barra de búsqueda por dirección, estilo Google Maps — solo
+            // antes de elegir destino: una vez confirmado, el panel de abajo
+            // ya muestra el resultado y la barra estorbaría.
+            if (uiState is ExploreUiState.Idle) {
+                DestinationSearchBar(
+                    query = searchQuery,
+                    suggestions = searchSuggestions,
+                    isSearching = isSearching,
+                    onQueryChanged = viewModel::onSearchQueryChanged,
+                    onSuggestionSelected = viewModel::onSearchSuggestionSelected,
+                    onClear = viewModel::onSearchCleared,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 48.dp, start = 16.dp, end = 16.dp),
+                )
+            }
 
             // Botón "mi ubicación" estilo Google Maps: recentra sin pelear
             // con el usuario mientras panea buscando dónde ir.
@@ -258,6 +310,41 @@ private fun addTrafficLayer(map: MapboxMap) {
     )
 }
 
+private const val DRIVING_ROUTE_SOURCE_ID = "redurbana-driving-route"
+private const val DRIVING_ROUTE_LAYER_ID = "redurbana-driving-route-layer"
+
+/**
+ * Ruta del modo Auto, como capa NATIVA de Mapbox (mismo mecanismo que
+ * [addTrafficLayer]) — a diferencia de dibujarla a mano en un Canvas de
+ * Compose, una capa nativa se reproyecta sola en cada frame que renderiza
+ * el motor del mapa, así que nunca puede quedar "pegada" en su posición de
+ * pantalla vieja al panear (eso era justo el bug: la versión en Canvas
+ * dependía de que Compose se enterara del paneo para volver a dibujar).
+ *
+ * Se borra y se vuelve a crear en cada llamada en vez de actualizar los
+ * datos de la fuente existente: es un poco menos eficiente, pero evita
+ * depender de la API exacta para actualizar un GeoJsonSource ya creado,
+ * que no se pudo verificar contra el SDK real en esta sesión.
+ */
+private fun updateDrivingRouteLayer(map: MapboxMap, polyline: List<GeoPoint>?) {
+    if (map.styleLayerExists(DRIVING_ROUTE_LAYER_ID)) map.removeStyleLayer(DRIVING_ROUTE_LAYER_ID)
+    if (map.styleSourceExists(DRIVING_ROUTE_SOURCE_ID)) map.removeStyleSource(DRIVING_ROUTE_SOURCE_ID)
+
+    if (polyline == null || polyline.size < 2) return
+
+    val lineString = LineString.fromLngLats(polyline.map { Point.fromLngLat(it.longitude, it.latitude) })
+    map.addSource(geoJsonSource(DRIVING_ROUTE_SOURCE_ID) { geometry(lineString) })
+    map.addLayer(
+        lineLayer(DRIVING_ROUTE_LAYER_ID, DRIVING_ROUTE_SOURCE_ID) {
+            lineWidth(6.0)
+            lineColor(android.graphics.Color.parseColor("#3B82F6")) // RedUrbanaColors.AccentBlue
+            lineCap(LineCap.ROUND)
+            lineJoin(LineJoin.ROUND)
+            slot("middle")
+        },
+    )
+}
+
 private fun routePoints(itinerary: TripItinerary): List<GeoPoint> = itinerary.legs.flatMap { leg ->
     when (leg) {
         is TripLeg.Walk -> leg.polyline
@@ -312,25 +399,10 @@ private fun ExploreOverlay(
                     }
                 }
             }
-            is ExploreUiState.DrivingResult -> {
-                drawPin(map, uiState.destination)
-                val points = uiState.route?.polyline ?: emptyList()
-                if (points.size >= 2) {
-                    val screenPoints = points.map { geoPoint ->
-                        val screen = map.pixelForCoordinate(Point.fromLngLat(geoPoint.longitude, geoPoint.latitude))
-                        Offset(screen.x.toFloat(), screen.y.toFloat())
-                    }
-                    for (i in 0 until screenPoints.lastIndex) {
-                        drawLine(
-                            color = RedUrbanaColors.AccentBlue,
-                            start = screenPoints[i],
-                            end = screenPoints[i + 1],
-                            strokeWidth = 6f,
-                            cap = androidx.compose.ui.graphics.StrokeCap.Round,
-                        )
-                    }
-                }
-            }
+            // La línea de la ruta ya no se dibuja acá: es una capa nativa de
+            // Mapbox (ver updateDrivingRouteLayer), no un Canvas — así no se
+            // desincroniza del mapa al panear. Acá solo queda el pin.
+            is ExploreUiState.DrivingResult -> drawPin(map, uiState.destination)
             else -> Unit
         }
     }
@@ -629,3 +701,85 @@ private fun WalkChip(distanceMeters: Double) {
 
 private fun formatDistance(meters: Double): String =
     if (meters >= 1000) "${(meters / 100).roundToInt() / 10.0} km" else "${meters.roundToInt()} m"
+
+/**
+ * Lupa + campo de texto para buscar una dirección (antes solo se podía
+ * elegir destino tocando el mapa). Dos pasos, como el SDK de Search de
+ * Mapbox: mientras se escribe se piden sugerencias sin coordenadas
+ * (`onQueryChanged`, con debounce en el ViewModel); tocar una sugerencia
+ * recién ahí la resuelve a un punto real (`onSuggestionSelected`).
+ */
+@Composable
+private fun DestinationSearchBar(
+    query: String,
+    suggestions: List<SearchSuggestion>,
+    isSearching: Boolean,
+    onQueryChanged: (String) -> Unit,
+    onSuggestionSelected: (SearchSuggestion) -> Unit,
+    onClear: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 12.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(text = "🔍", style = MaterialTheme.typography.titleMedium)
+                TextField(
+                    value = query,
+                    onValueChange = onQueryChanged,
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text("Buscar una dirección…", color = RedUrbanaColors.TextTertiary) },
+                    singleLine = true,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                        unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                        focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
+                        unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
+                    ),
+                )
+                if (query.isNotEmpty()) {
+                    TextButton(onClick = onClear) { Text("✕") }
+                }
+            }
+        }
+
+        if (isSearching || suggestions.isNotEmpty()) {
+            GlassCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp),
+                contentPadding = PaddingValues(vertical = 4.dp),
+            ) {
+                if (isSearching && suggestions.isEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        CircularProgressIndicator(color = RedUrbanaColors.AccentGreenPrimary)
+                    }
+                } else {
+                    LazyColumn(modifier = Modifier.heightIn(max = 280.dp)) {
+                        items(suggestions) { suggestion ->
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onSuggestionSelected(suggestion) }
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                            ) {
+                                Text(text = suggestion.name, style = MaterialTheme.typography.bodyMedium, color = RedUrbanaColors.TextPrimary)
+                                val subtitle = suggestion.fullAddress ?: suggestion.descriptionText
+                                if (subtitle != null) {
+                                    Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = RedUrbanaColors.TextSecondary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -28,12 +28,18 @@ import javax.inject.Singleton
  * `SecurityException` — el pedido real del permiso (una sola vez, al abrir
  * la app) vive en `MainActivity`.
  *
- * PRIORITY_BALANCED_POWER_ACCURACY, no PRIORITY_HIGH_ACCURACY: la de alta
- * precisión depende casi excluyentemente del chip GPS — en una tablet
- * solo-WiFi (sin GPS ni datos móviles), FusedLocationProviderClient nunca
- * llega a resolver un fix con esa prioridad y el Flow se queda mudo para
- * siempre. La prioridad balanceada también acepta ubicación por red (WiFi),
- * que sí está disponible en ese escenario.
+ * PRIORITY_BALANCED_POWER_ACCURACY por defecto, no PRIORITY_HIGH_ACCURACY:
+ * la de alta precisión depende casi excluyentemente del chip GPS — en una
+ * tablet solo-WiFi (sin GPS ni datos móviles), FusedLocationProviderClient
+ * nunca llega a resolver un fix con esa prioridad y el Flow se queda mudo
+ * para siempre. La prioridad balanceada también acepta ubicación por red
+ * (WiFi), que sí está disponible en ese escenario.
+ *
+ * [DeviceLocationSource.observeLocation]'s `highAccuracy = true` (usado por
+ * la navegación paso a paso manejando) pide PRIORITY_HIGH_ACCURACY igual:
+ * ahí el dispositivo real ya está en un vehículo en movimiento (GPS
+ * disponible en la enorme mayoría de los casos) y la precisión de carril +
+ * velocidad/rumbo reales importan mucho más que agotar batería.
  */
 @Singleton
 class FusedDeviceLocationSource @Inject constructor(
@@ -45,7 +51,7 @@ class FusedDeviceLocationSource @Inject constructor(
     }
 
     @SuppressLint("MissingPermission") // chequeado a mano antes de llamar a la API de ubicación
-    override fun observeLocation(intervalMs: Long): Flow<RawLocationSample> = callbackFlow {
+    override fun observeLocation(intervalMs: Long, highAccuracy: Boolean): Flow<RawLocationSample> = callbackFlow {
         val hasPermission = ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.ACCESS_FINE_LOCATION,
@@ -63,8 +69,9 @@ class FusedDeviceLocationSource @Inject constructor(
             if (location != null) trySend(location.toRawSample())
         }
 
+        val priority = if (highAccuracy) Priority.PRIORITY_HIGH_ACCURACY else Priority.PRIORITY_BALANCED_POWER_ACCURACY
         val request = LocationRequest.Builder(intervalMs)
-            .setPriority(Priority.PRIORITY_BALANCED_POWER_ACCURACY)
+            .setPriority(priority)
             .build()
 
         val callback = object : LocationCallback() {

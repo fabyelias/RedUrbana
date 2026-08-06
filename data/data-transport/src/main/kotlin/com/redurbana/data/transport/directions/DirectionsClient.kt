@@ -18,7 +18,12 @@ import kotlin.math.roundToInt
 
 enum class DirectionsProfile(val pathSegment: String) {
     WALKING("walking"),
-    DRIVING("driving"),
+    // "driving-traffic", no "driving": usa congestión en vivo para elegir
+    // calles, no solo la ruta más corta en el mapa base — reporte de campo:
+    // el perfil simple mandaba por una avenida (Santa Fe) en vez de calles
+    // internas más rápidas para ese viaje puntual. Mismo perfil que usan
+    // Waze/Google Maps para navegación real.
+    DRIVING("driving-traffic"),
 }
 
 data class MapboxRoute(
