@@ -7,6 +7,9 @@ import com.redurbana.core.location.DeviceLocationSource
 import com.redurbana.domain.transport.model.DrivingRoute
 import com.redurbana.domain.transport.model.GeoPoint
 import com.redurbana.domain.transport.model.RouteStep
+import com.redurbana.domain.transport.model.VehicleCategory
+import com.redurbana.domain.transport.model.VehicleDimensions
+import com.redurbana.domain.transport.model.VehicleProfile
 import com.redurbana.domain.transport.model.projectOntoPolyline
 import com.redurbana.domain.transport.usecase.GetDrivingRouteUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -80,6 +83,27 @@ class CarNavigationViewModel @Inject constructor(
     )
     val destinationName: String = savedStateHandle.get<String>("destinationName") ?: "destino"
 
+    /**
+     * Viaja por args de navegación (ver AppRoute.CarNavigation) — String por
+     * la misma limitación de siempre (Navigation Compose no serializa enums
+     * ni Double directo). Alturas/ancho/peso vacíos = sin dimensiones (autos,
+     * motos, camionetas, patrulleros no las necesitan).
+     */
+    val vehicleProfile: VehicleProfile = run {
+        val category = savedStateHandle.get<String>("vehicleCategory")
+            ?.let { name -> runCatching { VehicleCategory.valueOf(name) }.getOrNull() }
+            ?: VehicleCategory.CAR
+        val height = savedStateHandle.get<String>("vehicleHeightMeters")?.toDoubleOrNull()
+        val width = savedStateHandle.get<String>("vehicleWidthMeters")?.toDoubleOrNull()
+        val weight = savedStateHandle.get<String>("vehicleWeightTons")?.toDoubleOrNull()
+        val dimensions = if (height != null && width != null && weight != null) {
+            VehicleDimensions(heightMeters = height, widthMeters = width, weightTons = weight)
+        } else {
+            null
+        }
+        VehicleProfile(category = category, dimensions = dimensions)
+    }
+
     private val _uiState = MutableStateFlow<CarNavigationUiState>(CarNavigationUiState.Loading)
     val uiState: StateFlow<CarNavigationUiState> = _uiState.asStateFlow()
 
@@ -119,7 +143,7 @@ class CarNavigationViewModel @Inject constructor(
 
     private suspend fun requestRoute(origin: GeoPoint) {
         _uiState.value = CarNavigationUiState.Loading
-        getDrivingRoute(origin, destination)
+        getDrivingRoute(origin, destination, vehicleProfile)
             .onSuccess { route ->
                 offRouteStreak = 0
                 announced.clear()

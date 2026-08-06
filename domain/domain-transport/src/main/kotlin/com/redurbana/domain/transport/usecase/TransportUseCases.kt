@@ -10,6 +10,7 @@ import com.redurbana.domain.transport.model.RouteId
 import com.redurbana.domain.transport.model.StopId
 import com.redurbana.domain.transport.model.VehicleId
 import com.redurbana.domain.transport.model.VehiclePosition
+import com.redurbana.domain.transport.model.VehicleProfile
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 
@@ -84,6 +85,9 @@ class GetRouteDetailsUseCase @Inject constructor(
 class GetDrivingRouteUseCase @Inject constructor(
     private val provider: DirectionsProvider,
 ) {
-    suspend operator fun invoke(origin: GeoPoint, destination: GeoPoint): Result<DrivingRoute> =
-        provider.getDrivingRoute(origin, destination)
+    suspend operator fun invoke(
+        origin: GeoPoint,
+        destination: GeoPoint,
+        vehicleProfile: VehicleProfile = VehicleProfile(),
+    ): Result<DrivingRoute> = provider.getDrivingRoute(origin, destination, vehicleProfile)
 }

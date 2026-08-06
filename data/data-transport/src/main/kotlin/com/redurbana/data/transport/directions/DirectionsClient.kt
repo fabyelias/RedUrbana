@@ -5,6 +5,8 @@ import com.redurbana.domain.transport.DirectionsProvider
 import com.redurbana.domain.transport.model.DrivingRoute
 import com.redurbana.domain.transport.model.GeoPoint
 import com.redurbana.domain.transport.model.RouteStep
+import com.redurbana.domain.transport.model.VehicleDimensions
+import com.redurbana.domain.transport.model.VehicleProfile
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -101,15 +103,27 @@ class DirectionsClient @Inject constructor(
         // candidata), así que no vale la pena pedir/parsear ese payload extra
         // en ese caso.
         withSteps: Boolean = false,
+        // Solo se manda si el vehículo elegido lo necesita (camión, colectivo,
+        // ambulancia, bomberos — ver VehicleCategory.requiresDimensions): son
+        // parámetros reales de la Directions API, "mejor esfuerzo" del lado de
+        // Mapbox — evita calles con un límite de altura/ancho/peso cargado por
+        // debajo de la medida del vehículo, no garantiza cubrir cada
+        // restricción real que pueda existir.
+        dimensions: VehicleDimensions? = null,
     ): Result<MapboxRoute> =
         withContext(Dispatchers.IO) {
             runCatching {
                 val token = context.getString(com.redurbana.core.common.R.string.mapbox_public_token)
                 val coordinates = "${from.longitude},${from.latitude};${to.longitude},${to.latitude}"
                 val extraParams = if (withSteps) "&steps=true&voice_instructions=true&voice_units=metric&language=es" else ""
+                val dimensionParams = if (dimensions != null) {
+                    "&max_height=${dimensions.heightMeters}&max_width=${dimensions.widthMeters}&max_weight=${dimensions.weightTons}"
+                } else {
+                    ""
+                }
                 val url = URL(
                     "https://api.mapbox.com/directions/v5/mapbox/${profile.pathSegment}/$coordinates" +
-                        "?geometries=geojson&overview=full$extraParams&access_token=$token",
+                        "?geometries=geojson&overview=full$extraParams$dimensionParams&access_token=$token",
                 )
                 val connection = url.openConnection() as HttpURLConnection
                 connection.requestMethod = "GET"
@@ -145,8 +159,12 @@ class DirectionsClient @Inject constructor(
         polyline = geometry.coordinates.map { GeoPoint(latitude = it[1], longitude = it[0]) },
     )
 
-    override suspend fun getDrivingRoute(origin: GeoPoint, destination: GeoPoint): Result<DrivingRoute> =
-        route(origin, destination, DirectionsProfile.DRIVING, withSteps = true).map {
+    override suspend fun getDrivingRoute(
+        origin: GeoPoint,
+        destination: GeoPoint,
+        vehicleProfile: VehicleProfile,
+    ): Result<DrivingRoute> =
+        route(origin, destination, DirectionsProfile.DRIVING, withSteps = true, dimensions = vehicleProfile.dimensions).map {
             DrivingRoute(distanceMeters = it.distanceMeters, durationMinutes = it.durationMinutes, polyline = it.polyline, steps = it.steps)
         }
 }

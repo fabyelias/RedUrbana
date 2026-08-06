@@ -1,6 +1,7 @@
 package com.redurbana.feature.lines
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,10 +10,14 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -37,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.mapbox.geojson.LineString
@@ -69,6 +75,9 @@ import com.redurbana.domain.transport.model.GeoPoint
 import com.redurbana.domain.transport.model.Stop
 import com.redurbana.domain.transport.model.TripItinerary
 import com.redurbana.domain.transport.model.TripLeg
+import com.redurbana.domain.transport.model.VehicleCategory
+import com.redurbana.domain.transport.model.VehicleDimensions
+import com.redurbana.domain.transport.model.VehicleProfile
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -92,11 +101,12 @@ fun ExploreMapScreen(
     modifier: Modifier = Modifier,
     viewModel: ExploreViewModel = hiltViewModel(),
     onStartTrip: (routeId: String, alightingStop: Stop) -> Unit = { _, _ -> },
-    onStartDriving: (destination: GeoPoint, destinationName: String) -> Unit = { _, _ -> },
+    onStartDriving: (destination: GeoPoint, destinationName: String, vehicleProfile: VehicleProfile) -> Unit = { _, _, _ -> },
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val liveLocation by viewModel.liveLocation.collectAsState()
     val travelMode by viewModel.travelMode.collectAsState()
+    val vehicleProfile by viewModel.vehicleProfile.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val searchSuggestions by viewModel.searchSuggestions.collectAsState()
     val isSearching by viewModel.isSearching.collectAsState()
@@ -187,6 +197,19 @@ fun ExploreMapScreen(
         updateDrivingRouteLayer(map, polyline)
     }
 
+    // Camión/colectivo/ambulancia/bomberos necesitan medidas antes de poder
+    // pedir ruta (Mapbox recién puede evitar calles con restricción de
+    // altura/ancho/peso si se las mandamos) — el diálogo aparece apenas se
+    // elige uno de esos vehículos y todavía no las cargó, en cualquier
+    // pantalla del flujo (no solo antes de confirmar destino).
+    if (vehicleProfile.category.requiresDimensions && vehicleProfile.dimensions == null) {
+        VehicleDimensionsDialog(
+            category = vehicleProfile.category,
+            onConfirm = viewModel::onVehicleDimensionsConfirmed,
+            onDismiss = viewModel::onVehicleDimensionsCancelled,
+        )
+    }
+
     BottomSheetScaffold(
         modifier = modifier,
         scaffoldState = scaffoldState,
@@ -196,6 +219,8 @@ fun ExploreMapScreen(
                 state = uiState,
                 travelMode = travelMode,
                 onTravelModeSelected = viewModel::onTravelModeSelected,
+                vehicleProfile = vehicleProfile,
+                onVehicleCategorySelected = viewModel::onVehicleCategorySelected,
                 onConfirm = viewModel::onDestinationConfirmed,
                 onCancel = viewModel::onCancelDestination,
                 onItinerarySelected = viewModel::onItinerarySelected,
@@ -230,6 +255,9 @@ fun ExploreMapScreen(
                 liveLocation = liveLocation,
                 mapboxMap = nativeMap,
                 cameraTick = cameraTick,
+                // Solo en modo Vehículo: en Colectivo el punto es "vos
+                // esperando/caminando", no tiene sentido mostrarlo como auto/moto/etc.
+                userVehicleEmoji = if (travelMode == TravelMode.CAR) vehicleProfile.category.emoji else null,
                 modifier = Modifier.fillMaxSize(),
             )
 
@@ -365,10 +393,15 @@ private fun ExploreOverlay(
     // Sin uso adentro: solo para forzar redibujo en cada cambio de cámara,
     // incluido paneo puro sin zoom (ver comentario en ExploreMapScreen).
     cameraTick: Int = 0,
+    // No-null en modo Vehículo: el punto "estás acá" se dibuja como el
+    // emoji del vehículo elegido en vez del punto azul genérico.
+    userVehicleEmoji: String? = null,
 ) {
     Canvas(modifier = modifier) {
         val map = mapboxMap ?: return@Canvas
-        liveLocation?.let { drawUserLocationDot(map, it) }
+        liveLocation?.let { location ->
+            if (userVehicleEmoji != null) drawVehicleDot(map, location, userVehicleEmoji) else drawUserLocationDot(map, location)
+        }
         when (uiState) {
             is ExploreUiState.ConfirmingDestination -> drawPin(map, uiState.point)
             is ExploreUiState.Recommending -> drawPin(map, uiState.destination)
@@ -424,17 +457,36 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUserLocationDot
     drawCircle(color = androidx.compose.ui.graphics.Color.White, radius = 11f, center = center, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f))
 }
 
+/** Mismo círculo blanco de fondo que el punto azul, pero con el emoji del vehículo elegido adentro en vez de un punto liso. */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawVehicleDot(map: MapboxMap, point: GeoPoint, emoji: String) {
+    val screen = map.pixelForCoordinate(Point.fromLngLat(point.longitude, point.latitude))
+    val center = Offset(screen.x.toFloat(), screen.y.toFloat())
+    drawCircle(color = RedUrbanaColors.AccentBlue.copy(alpha = 0.18f), radius = 30f, center = center)
+    drawCircle(color = androidx.compose.ui.graphics.Color.White, radius = 24f, center = center)
+    drawCircle(color = RedUrbanaColors.AccentBlue, radius = 24f, center = center, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f))
+    drawContext.canvas.nativeCanvas.apply {
+        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = 30f
+            textAlign = android.graphics.Paint.Align.CENTER
+        }
+        val metrics = paint.fontMetrics
+        drawText(emoji, center.x, center.y - (metrics.ascent + metrics.descent) / 2f, paint)
+    }
+}
+
 @Composable
 private fun ExploreSheetContent(
     state: ExploreUiState,
     travelMode: TravelMode,
     onTravelModeSelected: (TravelMode) -> Unit,
+    vehicleProfile: VehicleProfile,
+    onVehicleCategorySelected: (VehicleCategory) -> Unit,
     onConfirm: () -> Unit,
     onCancel: () -> Unit,
     onItinerarySelected: (TripItinerary) -> Unit,
     onBack: () -> Unit,
     onStartTrip: (TripItinerary) -> Unit,
-    onStartDriving: (destination: GeoPoint, destinationName: String) -> Unit,
+    onStartDriving: (destination: GeoPoint, destinationName: String, vehicleProfile: VehicleProfile) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -448,6 +500,9 @@ private fun ExploreSheetContent(
         // en el otro modo, o vuelve a Idle?).
         if (state is ExploreUiState.Idle || state is ExploreUiState.ConfirmingDestination) {
             TravelModeSelector(selected = travelMode, onSelected = onTravelModeSelected)
+            if (travelMode == TravelMode.CAR) {
+                VehiclePicker(selected = vehicleProfile.category, onSelected = onVehicleCategorySelected)
+            }
         }
 
         when (state) {
@@ -499,7 +554,7 @@ private fun ExploreSheetContent(
                             color = RedUrbanaColors.TextPrimary,
                         )
                         Button(
-                            onClick = { onStartDriving(state.destination, state.destinationName) },
+                            onClick = { onStartDriving(state.destination, state.destinationName, vehicleProfile) },
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text("Comenzar viaje")
@@ -566,7 +621,14 @@ private fun ExploreSheetContent(
     }
 }
 
-/** A pie / Bici quedan para más adelante — ver LiveMapScreen para el equivalente en el mapa de seguimiento. */
+/**
+ * A pie / Bici quedan para más adelante — ver LiveMapScreen para el
+ * equivalente en el mapa de seguimiento. "Colectivo" acá es viajar COMO
+ * PASAJERO de transporte público (TravelMode.TRANSIT, usa TripPlanner) — no
+ * confundir con "Colectivo" como categoría dentro de [VehiclePicker], que es
+ * manejar vos mismo un colectivo (por eso el chip dice "Vehículo", no
+ * "Auto": ahora cubre auto/moto/camioneta/camión/colectivo/emergencia).
+ */
 @Composable
 private fun TravelModeSelector(selected: TravelMode, onSelected: (TravelMode) -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -578,9 +640,155 @@ private fun TravelModeSelector(selected: TravelMode, onSelected: (TravelMode) ->
         FilterChip(
             selected = selected == TravelMode.CAR,
             onClick = { onSelected(TravelMode.CAR) },
-            label = { Text("Auto") },
+            label = { Text("Vehículo") },
         )
     }
+}
+
+/**
+ * Qué vehículo maneja el usuario — el punto "estás acá" del mapa pasa a
+ * dibujarse con el emoji de la categoría elegida (ver drawVehicleDot) y, si
+ * hace falta (camión/colectivo/ambulancia/bomberos), dispara el diálogo de
+ * medidas para que la ruta evite calles que no puede pasar. Los de
+ * emergencia van aparte y con borde propio para "destacarlos", como pidió
+ * el usuario — es solo agrupación visual, no cambia cómo se calcula la ruta.
+ */
+@Composable
+private fun VehiclePicker(selected: VehicleCategory, onSelected: (VehicleCategory) -> Unit) {
+    val regular = listOf(VehicleCategory.CAR, VehicleCategory.MOTORCYCLE, VehicleCategory.PICKUP, VehicleCategory.TRUCK, VehicleCategory.BUS)
+    val emergency = listOf(VehicleCategory.AMBULANCE, VehicleCategory.FIRE_TRUCK, VehicleCategory.POLICE)
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(regular) { category ->
+            VehicleChip(category = category, selected = category == selected, onClick = { onSelected(category) })
+        }
+        // Separador simple con alto fijo — nada de VerticalDivider (usa
+        // fillMaxHeight, que dentro de un LazyRow sin alto explícito puede
+        // pedir una altura infinita y romper el layout).
+        item {
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 2.dp)
+                    .height(32.dp)
+                    .width(1.dp)
+                    .background(RedUrbanaColors.TextTertiary.copy(alpha = 0.3f)),
+            )
+        }
+        items(emergency) { category ->
+            VehicleChip(category = category, selected = category == selected, onClick = { onSelected(category) })
+        }
+    }
+}
+
+@Composable
+private fun VehicleChip(category: VehicleCategory, selected: Boolean, onClick: () -> Unit) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text("${category.emoji} ${category.label()}") },
+        colors = if (category.isEmergency) {
+            androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                selectedContainerColor = RedUrbanaColors.AlertRed.copy(alpha = 0.25f),
+            )
+        } else {
+            androidx.compose.material3.FilterChipDefaults.filterChipColors()
+        },
+        border = if (category.isEmergency) {
+            androidx.compose.material3.FilterChipDefaults.filterChipBorder(
+                enabled = true,
+                selected = selected,
+                borderColor = RedUrbanaColors.AlertRed,
+                selectedBorderColor = RedUrbanaColors.AlertRed,
+            )
+        } else {
+            androidx.compose.material3.FilterChipDefaults.filterChipBorder(enabled = true, selected = selected)
+        },
+    )
+}
+
+private fun VehicleCategory.label(): String = when (this) {
+    VehicleCategory.CAR -> "Auto"
+    VehicleCategory.MOTORCYCLE -> "Moto"
+    VehicleCategory.PICKUP -> "Camioneta"
+    VehicleCategory.TRUCK -> "Camión"
+    VehicleCategory.BUS -> "Colectivo"
+    VehicleCategory.AMBULANCE -> "Ambulancia"
+    VehicleCategory.FIRE_TRUCK -> "Bomberos"
+    VehicleCategory.POLICE -> "Patrulla"
+}
+
+/**
+ * Medidas del vehículo — solo para las categorías que las necesitan (ver
+ * [VehicleCategory.requiresDimensions]). Se mandan tal cual a Mapbox
+ * (max_height/max_width/max_weight, ver DirectionsClient), que las usa
+ * "mejor esfuerzo" para evitar calles con una restricción cargada por
+ * debajo de la medida — no es una garantía de cubrir cada restricción real.
+ * Los valores iniciales son solo un punto de partida típico, editable.
+ */
+@Composable
+private fun VehicleDimensionsDialog(
+    category: VehicleCategory,
+    onConfirm: (VehicleDimensions) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val defaults = defaultDimensionsFor(category)
+    var height by remember(category) { mutableStateOf(defaults.heightMeters.toString()) }
+    var width by remember(category) { mutableStateOf(defaults.widthMeters.toString()) }
+    var weight by remember(category) { mutableStateOf(defaults.weightTons.toString()) }
+
+    val heightValue = height.toDoubleOrNull()
+    val widthValue = width.toDoubleOrNull()
+    val weightValue = weight.toDoubleOrNull()
+    val isValid = heightValue != null && heightValue > 0 && widthValue != null && widthValue > 0 && weightValue != null && weightValue > 0
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Medidas de ${category.emoji} ${category.label()}") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "Así la ruta evita túneles, puentes o calles con un límite menor a esto.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = RedUrbanaColors.TextSecondary,
+                )
+                DimensionField(label = "Altura (metros)", value = height, onValueChange = { height = it })
+                DimensionField(label = "Ancho (metros)", value = width, onValueChange = { width = it })
+                DimensionField(label = "Peso (toneladas)", value = weight, onValueChange = { weight = it })
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = isValid,
+                onClick = {
+                    if (heightValue != null && widthValue != null && weightValue != null) {
+                        onConfirm(VehicleDimensions(heightMeters = heightValue, widthMeters = widthValue, weightTons = weightValue))
+                    }
+                },
+            ) { Text("Confirmar") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancelar") }
+        },
+    )
+}
+
+@Composable
+private fun DimensionField(label: String, value: String, onValueChange: (String) -> Unit) {
+    androidx.compose.material3.OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+private fun defaultDimensionsFor(category: VehicleCategory): VehicleDimensions = when (category) {
+    VehicleCategory.TRUCK -> VehicleDimensions(heightMeters = 4.0, widthMeters = 2.5, weightTons = 12.0)
+    VehicleCategory.BUS -> VehicleDimensions(heightMeters = 3.5, widthMeters = 2.5, weightTons = 16.0)
+    VehicleCategory.AMBULANCE -> VehicleDimensions(heightMeters = 2.8, widthMeters = 2.2, weightTons = 4.5)
+    VehicleCategory.FIRE_TRUCK -> VehicleDimensions(heightMeters = 3.8, widthMeters = 2.5, weightTons = 15.0)
+    else -> VehicleDimensions(heightMeters = 1.6, widthMeters = 1.9, weightTons = 2.5)
 }
 
 @Composable

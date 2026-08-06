@@ -1,5 +1,6 @@
 package com.redurbana.feature.lines.navigation
 
+import android.graphics.Bitmap
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.mapbox.geojson.LineString
 import com.mapbox.geojson.Point
+import com.mapbox.maps.ImageHolder
 import com.mapbox.maps.MapboxMap
 import com.mapbox.maps.extension.compose.MapEffect
 import com.mapbox.maps.extension.compose.MapboxMap as MapboxMapComposable
@@ -40,8 +42,8 @@ import com.mapbox.maps.extension.style.layers.properties.generated.LineCap
 import com.mapbox.maps.extension.style.layers.properties.generated.LineJoin
 import com.mapbox.maps.extension.style.sources.addSource
 import com.mapbox.maps.extension.style.sources.generated.geoJsonSource
+import com.mapbox.maps.plugin.LocationPuck2D
 import com.mapbox.maps.plugin.PuckBearing
-import com.mapbox.maps.plugin.locationcomponent.createDefault2DPuck
 import com.mapbox.maps.plugin.locationcomponent.location
 import com.mapbox.maps.plugin.viewport.data.FollowPuckViewportStateBearing
 import com.mapbox.maps.plugin.viewport.data.FollowPuckViewportStateOptions
@@ -134,12 +136,16 @@ fun CarNavigationScreen(
                 nativeMap = mapView.mapboxMap
                 // Puck nativo de Mapbox (no el Canvas a mano que usan las
                 // otras pantallas): transitionToFollowPuckState necesita
-                // este puck real para seguirlo y rotarlo con el rumbo.
+                // este puck real para seguirlo y rotarlo con el rumbo. El
+                // ícono es el emoji del vehículo elegido en ExploreMapScreen
+                // (viaja por AppRoute.CarNavigation), no el puntito
+                // genérico de siempre — pedido explícito: "al elegir el
+                // vehículo, el punto azul se transforma en el vehículo elegido".
                 mapView.location.updateSettings {
                     enabled = true
                     puckBearing = PuckBearing.HEADING
                     puckBearingEnabled = true
-                    locationPuck = createDefault2DPuck(withBearing = true)
+                    locationPuck = LocationPuck2D(topImage = ImageHolder.from(vehicleEmojiBitmap(viewModel.vehicleProfile.category.emoji)))
                 }
             }
         }
@@ -295,4 +301,23 @@ private fun updateDrivingRouteLayer(map: MapboxMap, polyline: List<GeoPoint>?) {
             slot("middle")
         },
     )
+}
+
+/**
+ * Dibuja el emoji del vehículo elegido a un bitmap chico para usarlo como
+ * ícono del puck nativo — no hay forma de pasarle texto/emoji directo al
+ * puck de Mapbox, solo imágenes (`LocationPuck2D.topImage: ImageHolder`,
+ * que sí acepta un [Bitmap] — ver `ImageHolder.from(bitmap)`).
+ */
+private fun vehicleEmojiBitmap(emoji: String, sizePx: Int = 140): Bitmap {
+    val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(bitmap)
+    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = sizePx * 0.75f
+        textAlign = android.graphics.Paint.Align.CENTER
+    }
+    val metrics = paint.fontMetrics
+    val y = sizePx / 2f - (metrics.ascent + metrics.descent) / 2f
+    canvas.drawText(emoji, sizePx / 2f, y, paint)
+    return bitmap
 }

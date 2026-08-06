@@ -74,11 +74,22 @@ sealed interface AppRoute {
      * giro, voz, recálculo si te desviás) — ver `feature-lines/navigation/CarNavigationScreen`.
      * El origen NO viaja acá: lo toma la pantalla del GPS en vivo. Coordenadas
      * como String por el mismo motivo que [LiveMap.alightingLat]/[LiveMap.alightingLng].
+     *
+     * [vehicleCategory] es el `name` de `VehicleCategory` (domain-transport) —
+     * mismo motivo de las coordenadas: Navigation Compose no tiene NavType
+     * para un enum de otro módulo. [vehicleHeightMeters]/[vehicleWidthMeters]/
+     * [vehicleWidthMeters] vacíos ("") = sin dimensiones cargadas (autos,
+     * motos, camionetas, patrulleros no las necesitan — ver
+     * `VehicleCategory.requiresDimensions`).
      */
     @Serializable
     data class CarNavigation(
         val destinationLat: String,
         val destinationLng: String,
         val destinationName: String,
+        val vehicleCategory: String,
+        val vehicleHeightMeters: String = "",
+        val vehicleWidthMeters: String = "",
+        val vehicleWeightTons: String = "",
     ) : AppRoute
 }

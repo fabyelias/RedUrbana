@@ -8,6 +8,9 @@ import com.redurbana.core.location.DeviceLocationSource
 import com.redurbana.domain.transport.model.DrivingRoute
 import com.redurbana.domain.transport.model.GeoPoint
 import com.redurbana.domain.transport.model.TripItinerary
+import com.redurbana.domain.transport.model.VehicleCategory
+import com.redurbana.domain.transport.model.VehicleDimensions
+import com.redurbana.domain.transport.model.VehicleProfile
 import com.redurbana.domain.transport.usecase.GetDrivingRouteUseCase
 import com.redurbana.domain.transport.usecase.GetTripItinerariesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -71,6 +74,31 @@ class ExploreViewModel @Inject constructor(
 
     fun onTravelModeSelected(mode: TravelMode) {
         _travelMode.value = mode
+    }
+
+    private val _vehicleProfile = MutableStateFlow(VehicleProfile())
+    val vehicleProfile: StateFlow<VehicleProfile> = _vehicleProfile.asStateFlow()
+
+    /**
+     * Categorías como AMBULANCE/TRUCK/BUS/FIRE_TRUCK ([VehicleCategory.requiresDimensions])
+     * necesitan que el usuario cargue medidas ANTES de poder pedir una ruta
+     * (ver [VehicleCategory] — Mapbox recién puede evitar calles con
+     * restricción de altura/ancho/peso si se las mandamos). Elegir una de
+     * esas categorías limpia cualquier dimensión previa (de otro vehículo)
+     * y deja el perfil "incompleto" — la pantalla se encarga de mostrar el
+     * diálogo de medidas antes de dejar confirmar destino.
+     */
+    fun onVehicleCategorySelected(category: VehicleCategory) {
+        _vehicleProfile.value = VehicleProfile(category = category, dimensions = null)
+    }
+
+    fun onVehicleDimensionsConfirmed(dimensions: VehicleDimensions) {
+        _vehicleProfile.value = _vehicleProfile.value.copy(dimensions = dimensions)
+    }
+
+    /** Canceló el diálogo de medidas sin cargarlas: no tiene sentido dejar seleccionado un vehículo grande sin sus medidas, así que vuelve a Auto. */
+    fun onVehicleDimensionsCancelled() {
+        _vehicleProfile.value = VehicleProfile(category = VehicleCategory.CAR)
     }
 
     private val _searchQuery = MutableStateFlow("")
@@ -245,7 +273,7 @@ class ExploreViewModel @Inject constructor(
                 destinationName = current.placeName,
                 isLoading = true,
             )
-            getDrivingRoute(origin, current.point)
+            getDrivingRoute(origin, current.point, _vehicleProfile.value)
                 .onSuccess { route ->
                     _uiState.value = ExploreUiState.DrivingResult(
                         destination = current.point,
