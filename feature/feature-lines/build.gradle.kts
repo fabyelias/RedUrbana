@@ -23,6 +23,7 @@ dependencies {
     implementation(project(":core:core-common"))
     implementation(project(":core:core-location"))
     implementation(project(":domain:domain-transport"))
+    implementation(project(":domain:domain-crowdsourcing"))
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
@@ -42,6 +43,12 @@ dependencies {
     // ninguna dependencia además de las del SDK de mapas en sí.
     implementation(libs.mapbox.maps)
     implementation(libs.mapbox.compose)
+
+    // "Verse manejando" (CarNavigationViewModel/ExploreViewModel): construye
+    // LiveDriverPosition, que expone kotlinx.datetime.Instant — domain-crowdsourcing
+    // lo declara "implementation", no "api", así que no llega solo por
+    // transitividad (ver comentario en su build.gradle.kts).
+    implementation(libs.kotlinx.datetime)
 
     testImplementation(libs.junit)
     testImplementation(libs.turbine)

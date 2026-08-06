@@ -4,6 +4,10 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.redurbana.core.location.DeviceLocationSource
+import com.redurbana.domain.crowdsourcing.model.DriverSessionId
+import com.redurbana.domain.crowdsourcing.model.LiveDriverPosition
+import com.redurbana.domain.crowdsourcing.usecase.PublishLiveDriverPositionUseCase
+import com.redurbana.domain.crowdsourcing.usecase.StopSharingLiveDriverUseCase
 import com.redurbana.domain.transport.model.DrivingRoute
 import com.redurbana.domain.transport.model.GeoPoint
 import com.redurbana.domain.transport.model.RouteStep
@@ -20,6 +24,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
+import java.util.UUID
 import javax.inject.Inject
 import kotlin.math.roundToInt
 
@@ -56,6 +62,12 @@ private const val OFF_ROUTE_CONSECUTIVE_FIXES = 3
 private const val VOICE_FAR_THRESHOLD_METERS = 300.0
 private const val VOICE_NEAR_THRESHOLD_METERS = 50.0
 
+// Publicar cada 3 fixes (~3s con NAV_POLL_INTERVAL_MS=1s), no en cada uno:
+// mismo orden de magnitud que el sondeo del lado de quien mira (ver
+// SupabaseLiveDriversRepository.POLL_INTERVAL_MS) — publicar más seguido que
+// eso no lo haría verse más fluido para nadie, solo gastaría más red/Supabase.
+private const val LIVE_DRIVER_PUBLISH_EVERY_N_FIXES = 3
+
 /**
  * Sondea el GPS cada 1s (no los 5s por defecto del resto de la app — acá
  * hace falta esa frecuencia para que la cámara/velocidad/detección de
@@ -75,7 +87,19 @@ class CarNavigationViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val locationSource: DeviceLocationSource,
     private val getDrivingRoute: GetDrivingRouteUseCase,
+    private val publishLiveDriverPosition: PublishLiveDriverPositionUseCase,
+    private val stopSharingLiveDriver: StopSharingLiveDriverUseCase,
 ) : ViewModel() {
+
+    /**
+     * Nueva por cada vez que se entra a esta pantalla, se descarta al salir
+     * — nunca un id de cuenta (ver DriverSessionId). Mientras dure esta
+     * navegación, cualquier otro usuario con el mapa abierto ve este
+     * vehículo moverse (pedido explícito: "como Waze") — nunca en modo
+     * Colectivo, que ni siquiera pasa por esta pantalla.
+     */
+    private val driverSessionId = DriverSessionId(UUID.randomUUID().toString())
+    private var fixesSinceLastPublish = 0
 
     private val destination = GeoPoint(
         latitude = savedStateHandle.get<String>("destinationLat")!!.toDouble(),
@@ -137,8 +161,38 @@ class CarNavigationViewModel @Inject constructor(
                 } else {
                     onPositionUpdate(navPosition)
                 }
+
+                publishLiveDriverPositionThrottled(navPosition)
             }
         }
+    }
+
+    private fun publishLiveDriverPositionThrottled(navPosition: NavPosition) {
+        fixesSinceLastPublish++
+        if (fixesSinceLastPublish < LIVE_DRIVER_PUBLISH_EVERY_N_FIXES) return
+        fixesSinceLastPublish = 0
+        viewModelScope.launch {
+            publishLiveDriverPosition(
+                LiveDriverPosition(
+                    sessionId = driverSessionId,
+                    position = navPosition.point,
+                    bearingDegrees = navPosition.bearingDegrees,
+                    vehicleCategory = vehicleProfile.category,
+                    updatedAt = Clock.System.now(),
+                ),
+            )
+        }
+    }
+
+    /**
+     * Llamado desde el botón salir de CarNavigationScreen ANTES de navegar
+     * afuera (no desde onCleared(): viewModelScope ya está cancelado para
+     * cuando onCleared() corre, así que un suspend lanzado ahí no llega a
+     * ejecutarse — ver el comentario en CarNavigationScreen). Best-effort:
+     * si falla, la fila igual expira sola por el cron de limpieza.
+     */
+    suspend fun stopSharing() {
+        stopSharingLiveDriver(driverSessionId)
     }
 
     private suspend fun requestRoute(origin: GeoPoint) {

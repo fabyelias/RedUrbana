@@ -198,7 +198,17 @@ fun CarNavigationScreen(
             Text(if (tts.muted) "🔇" else "🔊")
         }
         FloatingActionButton(
-            onClick = onExit,
+            // Se borra la fila de "estoy manejando" ANTES de salir, no se
+            // espera a que expire sola (ver el comentario en
+            // CarNavigationViewModel.stopSharing sobre por qué esto no puede
+            // ir en onCleared()) — así el ícono desaparece del mapa de los
+            // demás apenas uno sale, no hasta 90s después.
+            onClick = {
+                recenterScope.launch {
+                    viewModel.stopSharing()
+                    onExit()
+                }
+            },
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(16.dp),

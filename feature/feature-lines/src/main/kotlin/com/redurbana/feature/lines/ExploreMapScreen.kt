@@ -71,6 +71,7 @@ import com.redurbana.core.ui.components.GlassCard
 import com.redurbana.core.ui.components.RouteBadge
 import com.redurbana.core.ui.theme.LineColorProvider
 import com.redurbana.core.ui.theme.RedUrbanaColors
+import com.redurbana.domain.crowdsourcing.model.LiveDriverPosition
 import com.redurbana.domain.transport.model.GeoPoint
 import com.redurbana.domain.transport.model.Stop
 import com.redurbana.domain.transport.model.TripItinerary
@@ -107,6 +108,7 @@ fun ExploreMapScreen(
     val liveLocation by viewModel.liveLocation.collectAsState()
     val travelMode by viewModel.travelMode.collectAsState()
     val vehicleProfile by viewModel.vehicleProfile.collectAsState()
+    val nearbyDrivers by viewModel.nearbyDrivers.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val searchSuggestions by viewModel.searchSuggestions.collectAsState()
     val isSearching by viewModel.isSearching.collectAsState()
@@ -258,6 +260,11 @@ fun ExploreMapScreen(
                 // Solo en modo Vehículo: en Colectivo el punto es "vos
                 // esperando/caminando", no tiene sentido mostrarlo como auto/moto/etc.
                 userVehicleEmoji = if (travelMode == TravelMode.CAR) vehicleProfile.category.emoji else null,
+                // Otros usuarios manejando cerca, en vivo — estilo Waze. Solo
+                // llegan acá los que eligieron "Vehículo" Y tocaron "Comenzar
+                // viaje" (ver CarNavigationViewModel); en Colectivo nadie
+                // publica nada, así que nunca aparecen.
+                nearbyDrivers = nearbyDrivers,
                 modifier = Modifier.fillMaxSize(),
             )
 
@@ -396,11 +403,15 @@ private fun ExploreOverlay(
     // No-null en modo Vehículo: el punto "estás acá" se dibuja como el
     // emoji del vehículo elegido en vez del punto azul genérico.
     userVehicleEmoji: String? = null,
+    nearbyDrivers: List<LiveDriverPosition> = emptyList(),
 ) {
     Canvas(modifier = modifier) {
         val map = mapboxMap ?: return@Canvas
         liveLocation?.let { location ->
             if (userVehicleEmoji != null) drawVehicleDot(map, location, userVehicleEmoji) else drawUserLocationDot(map, location)
+        }
+        for (driver in nearbyDrivers) {
+            drawVehicleDot(map, driver.position, driver.vehicleCategory.emoji)
         }
         when (uiState) {
             is ExploreUiState.ConfirmingDestination -> drawPin(map, uiState.point)

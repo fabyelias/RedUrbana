@@ -5,6 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.mapbox.geojson.Point
 import com.mapbox.search.result.SearchSuggestion
 import com.redurbana.core.location.DeviceLocationSource
+import com.redurbana.domain.crowdsourcing.model.DriverSessionId
+import com.redurbana.domain.crowdsourcing.model.LiveDriverPosition
+import com.redurbana.domain.crowdsourcing.usecase.ObserveNearbyLiveDriversUseCase
+import com.redurbana.domain.transport.GeoBounds
 import com.redurbana.domain.transport.model.DrivingRoute
 import com.redurbana.domain.transport.model.GeoPoint
 import com.redurbana.domain.transport.model.TripItinerary
@@ -22,7 +26,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.util.UUID
 import javax.inject.Inject
+import kotlin.math.cos
 
 /** A qué modo de viaje aplica la búsqueda al confirmar destino — A pie/Bici quedan para más adelante. */
 enum class TravelMode { TRANSIT, CAR }
@@ -58,12 +64,15 @@ sealed interface ExploreUiState {
     ) : ExploreUiState
 }
 
+private const val NEARBY_DRIVERS_RADIUS_METERS = 3_000.0
+
 @HiltViewModel
 class ExploreViewModel @Inject constructor(
     private val destinationSearchClient: DestinationSearchClient,
     private val getTripItineraries: GetTripItinerariesUseCase,
     private val getDrivingRoute: GetDrivingRouteUseCase,
     private val locationSource: DeviceLocationSource,
+    private val observeNearbyLiveDrivers: ObserveNearbyLiveDriversUseCase,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<ExploreUiState>(ExploreUiState.Idle)
@@ -173,6 +182,19 @@ class ExploreViewModel @Inject constructor(
     private val _liveLocation = MutableStateFlow<GeoPoint?>(null)
     val liveLocation: StateFlow<GeoPoint?> = _liveLocation.asStateFlow()
 
+    /**
+     * Otros usuarios manejando cerca ("Vehículo" + navegación activa, ver
+     * CarNavigationViewModel.publishLiveDriverPositionThrottled) — nunca
+     * incluye a alguien en modo Colectivo, que no publica nada. Este
+     * ViewModel no publica su propia posición (eso solo pasa en
+     * CarNavigationViewModel, cuando de verdad se está manejando, no
+     * mientras se elige destino) — el sessionId acá es solo para la firma
+     * del use case, nunca va a excluir una fila propia real.
+     */
+    private val _nearbyDrivers = MutableStateFlow<List<LiveDriverPosition>>(emptyList())
+    val nearbyDrivers: StateFlow<List<LiveDriverPosition>> = _nearbyDrivers.asStateFlow()
+    private val exploreSessionId = DriverSessionId(UUID.randomUUID().toString())
+
     init {
         viewModelScope.launch {
             runCatching {
@@ -181,6 +203,21 @@ class ExploreViewModel @Inject constructor(
                 }
             }
         }
+        viewModelScope.launch {
+            val center = _liveLocation.filterNotNull().first()
+            observeNearbyLiveDrivers(center.boundsWithRadius(NEARBY_DRIVERS_RADIUS_METERS), exploreSessionId)
+                .collect { drivers -> _nearbyDrivers.value = drivers }
+        }
+    }
+
+    /** Aproximación equirectangular (misma que GeoMath.kt en domain-transport) — de sobra para un radio de unos pocos km. */
+    private fun GeoPoint.boundsWithRadius(radiusMeters: Double): GeoBounds {
+        val latDelta = radiusMeters / 111_000.0
+        val lngDelta = radiusMeters / (111_000.0 * cos(Math.toRadians(latitude)).coerceAtLeast(0.01))
+        return GeoBounds(
+            northEast = GeoPoint(latitude = latitude + latDelta, longitude = longitude + lngDelta),
+            southWest = GeoPoint(latitude = latitude - latDelta, longitude = longitude - lngDelta),
+        )
     }
 
     /**

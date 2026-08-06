@@ -1,0 +1,95 @@
+-- RedUrbana — "verse manejando" estilo Waze (docs/ARQUITECTURA.md — feature
+-- nueva, no estaba en el schema inicial).
+--
+-- A propósito NO reusa crowd_pings/vehicle_group_estimates (0001/0002): ese
+-- par existe justamente para que ningún cliente pueda leer la posición
+-- individual de una persona — solo el promedio agregado por línea, calculado
+-- server-side. Acá el pedido es lo opuesto: mostrar la posición individual y
+-- en vivo de cada uno que eligió "Vehículo" y está navegando, visible para
+-- cualquier otro usuario con el mapa abierto (ver LiveDriversRepository.kt,
+-- lado Android).
+--
+-- LIMITACIÓN DE SEGURIDAD CONOCIDA: session_id es un id generado por el
+-- cliente (UUID random, ver CarNavigationViewModel), no algo que Postgres
+-- pueda verificar como "de verdad tuyo" — no hay auth.uid() de por medio
+-- (mismo modelo sin-login que crowd_pings, que también permite insert a
+-- cualquier anon). Esto significa que, en teoría, un cliente malicioso
+-- podría escribir o borrar la fila de sesión de otra persona adivinando o
+-- interceptando su session_id. Aceptable para una primera versión (mismo
+-- trade-off ya aceptado en 0001 para crowd_pings), pero si esto crece a algo
+-- con más adopción real vale la pena revisar: session_id firmado, o requerir
+-- auth anónima de Supabase (signInAnonymously) para tener un auth.uid() real
+-- contra el que sí se pueda filtrar en la policy.
+--
+-- Idempotente como 0001/0002.
+
+create table if not exists public.live_drivers (
+    session_id text primary key,
+    latitude double precision not null check (latitude between -90 and 90),
+    longitude double precision not null check (longitude between -180 and 180),
+    bearing_degrees real not null check (bearing_degrees >= 0 and bearing_degrees < 360),
+    vehicle_category text not null,
+    updated_at timestamptz not null default now()
+);
+
+create index if not exists live_drivers_lat_lng_idx on public.live_drivers (latitude, longitude);
+create index if not exists live_drivers_updated_at_idx on public.live_drivers (updated_at);
+
+alter table public.live_drivers enable row level security;
+
+-- Es información pública en vivo mientras dura el viaje — cualquiera con el
+-- mapa abierto tiene que poder verla (esa es la funcionalidad pedida).
+drop policy if exists "live_drivers_select_all" on public.live_drivers;
+create policy "live_drivers_select_all"
+    on public.live_drivers for select
+    to anon, authenticated
+    using (true);
+
+-- insert/update/delete abiertos a cualquiera (ver limitación de seguridad
+-- arriba) — necesario para el upsert por session_id sin auth.uid() real.
+drop policy if exists "live_drivers_insert_anyone" on public.live_drivers;
+create policy "live_drivers_insert_anyone"
+    on public.live_drivers for insert
+    to anon, authenticated
+    with check (true);
+
+drop policy if exists "live_drivers_update_anyone" on public.live_drivers;
+create policy "live_drivers_update_anyone"
+    on public.live_drivers for update
+    to anon, authenticated
+    using (true)
+    with check (true);
+
+drop policy if exists "live_drivers_delete_anyone" on public.live_drivers;
+create policy "live_drivers_delete_anyone"
+    on public.live_drivers for delete
+    to anon, authenticated
+    using (true);
+
+-- Limpieza: si el cliente no llega a borrar su fila al salir (app cerrada de
+-- golpe, sin red, crash), igual desaparece sola — así nadie queda mostrado
+-- "manejando" en un lugar donde ya no está. 30s de umbral (bastante más que
+-- los ~3s de intervalo de publicación del cliente, ver
+-- SupabaseLiveDriversRepository.POLL_INTERVAL_MS) + el minuto de granularidad
+-- de pg_cron (igual que 0002) = hasta ~90s de margen en el peor caso.
+create or replace function public.cleanup_stale_live_drivers()
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+    delete from public.live_drivers
+    where updated_at < now() - interval '30 seconds';
+end;
+$$;
+
+select cron.unschedule(jobid)
+from cron.job
+where jobname = 'cleanup-stale-live-drivers';
+
+select cron.schedule(
+    'cleanup-stale-live-drivers',
+    '* * * * *',
+    $$ select public.cleanup_stale_live_drivers(); $$
+);

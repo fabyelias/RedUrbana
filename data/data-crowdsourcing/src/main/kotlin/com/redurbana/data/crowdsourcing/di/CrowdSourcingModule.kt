@@ -6,7 +6,9 @@ import com.redurbana.core.location.FusedDeviceLocationSource
 import com.redurbana.data.crowdsourcing.LocationReporter
 import com.redurbana.data.crowdsourcing.R
 import com.redurbana.data.crowdsourcing.SupabaseCrowdSourcingRepository
+import com.redurbana.data.crowdsourcing.SupabaseLiveDriversRepository
 import com.redurbana.domain.crowdsourcing.CrowdSourcingRepository
+import com.redurbana.domain.crowdsourcing.LiveDriversRepository
 import com.redurbana.domain.crowdsourcing.TripSessionController
 import dagger.Binds
 import dagger.Module
@@ -33,6 +35,10 @@ import javax.inject.Singleton
  *   interfaces). Separado de CrowdSourcingRepository a propósito — ver el
  *   comentario en TripSessionController.kt sobre el ciclo de dependencias
  *   que evita.
+ * - LiveDriversRepository: SupabaseLiveDriversRepository — tabla live_drivers
+ *   (supabase/migrations/0003_live_drivers.sql), modelo de privacidad
+ *   distinto al de arriba: acá SÍ se ve la posición individual de cada uno
+ *   (ver LiveDriversRepository.kt).
  */
 @Module
 @InstallIn(SingletonComponent::class)
@@ -46,6 +52,9 @@ abstract class CrowdSourcingModule {
 
     @Binds
     abstract fun bindTripSessionController(impl: LocationReporter): TripSessionController
+
+    @Binds
+    abstract fun bindLiveDriversRepository(impl: SupabaseLiveDriversRepository): LiveDriversRepository
 
     companion object {
         @Provides
