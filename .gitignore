@@ -37,3 +37,8 @@ gradle.properties.local
 # al repo (el .jks/.keystore en sí ya lo cubren los patrones *.keystore/*.jks
 # de arriba). Ver docs/CREDENTIALS_SETUP.md sección 5.
 app/keystore.properties
+
+# Cuenta de servicio de Google Play (publicación automática a Play Console):
+# nunca al repo, mismo criterio que el keystore. En CI se reconstruye desde
+# un secret de GitHub — ver .github/workflows/publish-play-internal.yml.
+app/play-service-account.json

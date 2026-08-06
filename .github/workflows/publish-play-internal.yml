@@ -1,0 +1,76 @@
+name: Publicar en Play Console (prueba interna)
+
+# Cada push a main arma un AAB de release firmado y lo sube directo al
+# track "internal" de Play Console (Gradle Play Publisher, ver `play {}` en
+# app/build.gradle.kts) — los testers ya invitados reciben la actualización
+# sola, sin que nadie tenga que subir nada a mano.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      # Mismo criterio que build-debug-apk.yml: el token público de Mapbox
+      # no va al repo (ver docs/CREDENTIALS_SETUP.md sección 2).
+      - name: Generar recursos de Mapbox (token público)
+        run: |
+          mkdir -p app/src/main/res/values core/core-common/src/main/res/values
+          cat > app/src/main/res/values/mapbox.xml <<EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="mapbox_access_token" translatable="false">${MAPBOX_PUBLIC_TOKEN}</string>
+          </resources>
+          EOF
+          cat > core/core-common/src/main/res/values/mapbox_token.xml <<EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="mapbox_public_token" translatable="false">${MAPBOX_PUBLIC_TOKEN}</string>
+          </resources>
+          EOF
+        env:
+          MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
+
+      # Reconstruye el keystore de release y app/keystore.properties a partir
+      # de secrets — nunca viven en el repo (ver docs/CREDENTIALS_SETUP.md
+      # sección 5). KEYSTORE_BASE64 es el .jks codificado en base64.
+      - name: Reconstruir keystore de release
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 --decode > app/release.jks
+          cat > app/keystore.properties <<EOF
+          storeFile=release.jks
+          storePassword=${KEYSTORE_STORE_PASSWORD}
+          keyAlias=${KEYSTORE_KEY_ALIAS}
+          keyPassword=${KEYSTORE_KEY_PASSWORD}
+          EOF
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_STORE_PASSWORD: ${{ secrets.KEYSTORE_STORE_PASSWORD }}
+          KEYSTORE_KEY_ALIAS: ${{ secrets.KEYSTORE_KEY_ALIAS }}
+          KEYSTORE_KEY_PASSWORD: ${{ secrets.KEYSTORE_KEY_PASSWORD }}
+
+      # Cuenta de servicio de Google Play (permiso acotado a "prueba
+      # interna", ver la invitación hecha en Play Console → Usuarios y
+      # permisos). Nunca al repo — ver .gitignore.
+      - name: Reconstruir credencial de Play Console
+        run: echo "$PLAY_SERVICE_ACCOUNT_JSON" > app/play-service-account.json
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+
+      - run: chmod +x gradlew
+
+      - name: Publicar AAB en el track "internal"
+        run: ./gradlew :app:publishReleaseBundle --no-daemon
+        env:
+          ORG_GRADLE_PROJECT_MAPBOX_DOWNLOADS_TOKEN: ${{ secrets.MAPBOX_DOWNLOADS_TOKEN }}
