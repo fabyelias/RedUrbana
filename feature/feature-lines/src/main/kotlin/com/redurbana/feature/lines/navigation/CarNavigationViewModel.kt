@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.redurbana.core.location.DeviceLocationSource
+import com.redurbana.core.location.RawLocationSample
 import com.redurbana.domain.crowdsourcing.model.DriverSessionId
 import com.redurbana.domain.crowdsourcing.model.LiveDriverPosition
 import com.redurbana.domain.crowdsourcing.usecase.PublishLiveDriverPositionUseCase
@@ -14,6 +15,7 @@ import com.redurbana.domain.transport.model.RouteStep
 import com.redurbana.domain.transport.model.VehicleCategory
 import com.redurbana.domain.transport.model.VehicleDimensions
 import com.redurbana.domain.transport.model.VehicleProfile
+import com.redurbana.domain.transport.model.distanceMeters
 import com.redurbana.domain.transport.model.projectOntoPolyline
 import com.redurbana.domain.transport.usecase.GetDrivingRouteUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -28,6 +30,7 @@ import kotlinx.datetime.Clock
 import java.util.UUID
 import javax.inject.Inject
 import kotlin.math.roundToInt
+import kotlin.time.DurationUnit
 
 /** Posición en vivo durante la navegación — separado de GeoPoint a propósito: acá SÍ hace falta velocidad/rumbo, en el resto de la app no. */
 data class NavPosition(
@@ -157,6 +160,32 @@ class CarNavigationViewModel @Inject constructor(
     /** (índice de tramo, umbral "far"/"near") ya avisados por voz — evita repetir el mismo aviso en cada fix de GPS. */
     private val announced = mutableSetOf<Pair<Int, String>>()
 
+    private var previousFix: RawLocationSample? = null
+
+    /**
+     * GPS real trae velocidad medida por el receptor (efecto Doppler) — no
+     * hace falta calcular nada, se usa tal cual. Sin chip GPS (ubicación
+     * resuelta por red/WiFi, ver FusedDeviceLocationSource), speedMetersPerSecond
+     * casi siempre viene en 0 aunque el dispositivo se esté moviendo de
+     * verdad: cada fix por red es una foto de posición aislada, no trae
+     * velocidad medida. Reporte de campo: "el velocímetro no funciona,
+     * siempre 0" — acá se estima como respaldo "distancia recorrida entre
+     * el fix anterior y este, sobre el tiempo transcurrido", mejor que
+     * mostrar siempre 0. Sigue siendo una estimación, no un velocímetro real
+     * — el techo de precisión de la ubicación por red aplica igual acá.
+     */
+    private fun deriveSpeedKmh(sample: RawLocationSample): Int {
+        val previous = previousFix
+        previousFix = sample
+        if (sample.speedMetersPerSecond > 0.5f) return (sample.speedMetersPerSecond * 3.6f).roundToInt()
+        if (previous == null) return 0
+        val elapsedSeconds = (sample.timestamp - previous.timestamp).toDouble(DurationUnit.SECONDS)
+        if (elapsedSeconds <= 0.0) return 0
+        val distanceTraveled = GeoPoint(sample.latitude, sample.longitude)
+            .distanceMeters(GeoPoint(previous.latitude, previous.longitude))
+        return ((distanceTraveled / elapsedSeconds) * 3.6).roundToInt()
+    }
+
     init {
         viewModelScope.launch {
             var hasRequestedInitialRoute = false
@@ -164,7 +193,7 @@ class CarNavigationViewModel @Inject constructor(
                 val point = GeoPoint(sample.latitude, sample.longitude)
                 val navPosition = NavPosition(
                     point = point,
-                    speedKmh = (sample.speedMetersPerSecond * 3.6f).roundToInt(),
+                    speedKmh = deriveSpeedKmh(sample),
                     bearingDegrees = sample.bearingDegrees,
                 )
                 _position.value = navPosition

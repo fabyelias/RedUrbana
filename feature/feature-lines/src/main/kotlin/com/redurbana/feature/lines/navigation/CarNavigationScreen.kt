@@ -337,15 +337,30 @@ private fun updateDrivingRouteLayer(map: MapboxMap, polyline: List<GeoPoint>?) {
  * puck de Mapbox, solo imágenes (`LocationPuck2D.topImage: ImageHolder`,
  * que sí acepta un [Bitmap] — ver `ImageHolder.from(bitmap)`).
  */
+/**
+ * Reporte de campo: "voy hacia adelante y el dibujo mira hacia atrás". El
+ * puck nativo rota la imagen asumiendo que a rumbo 0° (norte) el FRENTE del
+ * dibujo ya apunta hacia arriba — pero el emoji de vehículo (🚑🚗🚌 etc, en
+ * la tipografía de emoji de Android/Noto) viene dibujado mirando hacia la
+ * IZQUIERDA por diseño, no hacia arriba. Sin corrección, con rumbo 0° se ve
+ * apuntando al oeste (90° de error), y para cualquier otro rumbo el error
+ * se arrastra igual — que a ojo puede leerse como "mirando para cualquier
+ * lado menos el que corresponde", incluido "hacia atrás" según el ángulo.
+ * Se rota el bitmap 90° en sentido horario ANTES de que Mapbox aplique su
+ * propia rotación por rumbo, así el frente del dibujo queda apuntando hacia
+ * arriba a rumbo 0°, que es lo que el puck nativo asume.
+ */
 private fun vehicleEmojiBitmap(emoji: String, sizePx: Int = 140): Bitmap {
     val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
     val canvas = android.graphics.Canvas(bitmap)
+    val center = sizePx / 2f
+    canvas.rotate(90f, center, center)
     val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
         textSize = sizePx * 0.75f
         textAlign = android.graphics.Paint.Align.CENTER
     }
     val metrics = paint.fontMetrics
-    val y = sizePx / 2f - (metrics.ascent + metrics.descent) / 2f
-    canvas.drawText(emoji, sizePx / 2f, y, paint)
+    val y = center - (metrics.ascent + metrics.descent) / 2f
+    canvas.drawText(emoji, center, y, paint)
     return bitmap
 }
