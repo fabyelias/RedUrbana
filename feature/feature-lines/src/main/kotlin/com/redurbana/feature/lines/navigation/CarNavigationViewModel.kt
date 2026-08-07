@@ -65,14 +65,14 @@ private const val OFF_ROUTE_CONSECUTIVE_FIXES = 3
 private const val VOICE_FAR_THRESHOLD_METERS = 300.0
 private const val VOICE_NEAR_THRESHOLD_METERS = 50.0
 
-// Reporte de campo: el punto apareciendo fuera de la calzada/puente pese a
-// que el dispositivo SÍ tiene chip GPS real. Un fix puntual de mala calidad
-// (el radio de "accuracy" que reporta el propio Location, ver
-// RawLocationSample.accuracyMeters) puede colarse igual aun pidiendo
-// PRIORITY_HIGH_ACCURACY + setWaitForAccurateLocation — se descarta acá en
-// vez de dibujarlo: mejor el punto quieto en su última posición buena que
-// saltando a un lugar erróneo cada vez que llega un fix ruidoso.
-private const val MAX_USABLE_ACCURACY_METERS = 35f
+// 35m se probó y resultó demasiado estricto para este hardware (GPS sin
+// asistencia por datos móviles — tablet solo-WiFi, sin SIM): reporte de
+// campo, con ese umbral se descartaban tantos fixes reales que el punto
+// quedaba "a saltos" (quieto, salta 50m, quieto) — peor que el problema
+// original que se quería evitar (punto fuera de la calzada). 120m sigue
+// filtrando los casos realmente malos (equivalentes a ubicación por red)
+// sin descartar la variación normal de un GPS sin asistencia.
+private const val MAX_USABLE_ACCURACY_METERS = 120f
 
 // Publicar cada 3 fixes (~3s con NAV_POLL_INTERVAL_MS=1s), no en cada uno:
 // mismo orden de magnitud que el sondeo del lado de quien mira (ver

@@ -14,6 +14,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -23,6 +24,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.mapbox.geojson.LineString
@@ -78,6 +80,17 @@ fun CarNavigationScreen(
     val position by viewModel.position.collectAsState()
     val tts = rememberNavTts()
     val recenterScope = rememberCoroutineScope()
+
+    // Reporte de campo: "la pantalla se apaga cada tantos segundos mientras
+    // está funcionando la aplicación no se debe apagar" — navegando activo
+    // no debe entrar en reposo, mismo criterio que Google Maps/Waze. Se
+    // restaura el comportamiento normal al salir de esta pantalla, no queda
+    // prendida para siempre.
+    val view = LocalView.current
+    DisposableEffect(view) {
+        view.keepScreenOn = true
+        onDispose { view.keepScreenOn = false }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.speak.collect { text -> tts.speak(text) }
@@ -144,7 +157,14 @@ fun CarNavigationScreen(
                 // vehículo, el punto azul se transforma en el vehículo elegido".
                 mapView.location.updateSettings {
                     enabled = true
-                    puckBearing = PuckBearing.HEADING
+                    // COURSE (rumbo real del GPS, hacia dónde te estás
+                    // moviendo), no HEADING (brújula/magnetómetro, hacia
+                    // dónde apunta el dispositivo) — reporte de campo: "el
+                    // mapa se queda quieto, no gira". HEADING depende de la
+                    // orientación física de la tablet (montada/sostenida en
+                    // cualquier ángulo dentro del auto), que no tiene
+                    // relación con la dirección de viaje; COURSE sí.
+                    puckBearing = PuckBearing.COURSE
                     puckBearingEnabled = true
                     locationPuck = LocationPuck2D(topImage = ImageHolder.from(vehicleEmojiBitmap(viewModel.vehicleProfile.category.emoji)))
                 }

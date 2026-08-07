@@ -76,18 +76,16 @@ class FusedDeviceLocationSource @Inject constructor(
             }
         }
 
+        // setWaitForAccurateLocation(true) se probó y se sacó: reporte de
+        // campo, con esto prendido los fixes llegaban con hasta minuto y
+        // medio de atraso y "a saltos" (quieto, salta 50m, quieto). En este
+        // hardware (GPS sin asistencia por datos móviles — tablet solo-WiFi,
+        // sin SIM) el motor de ubicación puede tardar mucho en considerar un
+        // fix "suficientemente bueno" internamente, y mientras tanto no
+        // entrega nada — peor para manejar que aceptar el fix que venga.
         val priority = if (highAccuracy) Priority.PRIORITY_HIGH_ACCURACY else Priority.PRIORITY_BALANCED_POWER_ACCURACY
         val request = LocationRequest.Builder(intervalMs)
             .setPriority(priority)
-            .apply {
-                // Solo para navegación paso a paso: no entregar el primer fix
-                // que llegue si es de baja calidad, esperar a uno bueno de
-                // verdad — mismo reporte de campo (punto impreciso, velocidad
-                // en 0 pese a tener chip GPS real). Sin esto, el motor de
-                // ubicación puede devolver una primera estimación gruesa
-                // mientras el GPS todavía está convergiendo.
-                if (highAccuracy) setWaitForAccurateLocation(true)
-            }
             .build()
 
         val callback = object : LocationCallback() {
