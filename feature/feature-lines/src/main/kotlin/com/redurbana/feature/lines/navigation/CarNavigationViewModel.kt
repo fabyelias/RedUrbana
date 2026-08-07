@@ -65,6 +65,15 @@ private const val OFF_ROUTE_CONSECUTIVE_FIXES = 3
 private const val VOICE_FAR_THRESHOLD_METERS = 300.0
 private const val VOICE_NEAR_THRESHOLD_METERS = 50.0
 
+// Reporte de campo: el punto apareciendo fuera de la calzada/puente pese a
+// que el dispositivo SÍ tiene chip GPS real. Un fix puntual de mala calidad
+// (el radio de "accuracy" que reporta el propio Location, ver
+// RawLocationSample.accuracyMeters) puede colarse igual aun pidiendo
+// PRIORITY_HIGH_ACCURACY + setWaitForAccurateLocation — se descarta acá en
+// vez de dibujarlo: mejor el punto quieto en su última posición buena que
+// saltando a un lugar erróneo cada vez que llega un fix ruidoso.
+private const val MAX_USABLE_ACCURACY_METERS = 35f
+
 // Publicar cada 3 fixes (~3s con NAV_POLL_INTERVAL_MS=1s), no en cada uno:
 // mismo orden de magnitud que el sondeo del lado de quien mira (ver
 // SupabaseLiveDriversRepository.POLL_INTERVAL_MS) — publicar más seguido que
@@ -190,6 +199,14 @@ class CarNavigationViewModel @Inject constructor(
         viewModelScope.launch {
             var hasRequestedInitialRoute = false
             locationSource.observeLocation(intervalMs = NAV_POLL_INTERVAL_MS, highAccuracy = true).collect { sample ->
+                // Fix ruidoso: se descarta (ni mueve el punto ni cuenta para
+                // desvío/velocidad) — ver MAX_USABLE_ACCURACY_METERS. Salvo
+                // para la ruta INICIAL: ahí conviene arrancar con el primer
+                // fix que llegue aunque no sea preciso, antes que quedarse
+                // en "Calculando ruta…" para siempre esperando uno perfecto
+                // que en un momento de mala señal capaz no llega nunca.
+                if (hasRequestedInitialRoute && sample.accuracyMeters > MAX_USABLE_ACCURACY_METERS) return@collect
+
                 val point = GeoPoint(sample.latitude, sample.longitude)
                 val navPosition = NavPosition(
                     point = point,

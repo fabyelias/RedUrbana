@@ -64,14 +64,30 @@ class FusedDeviceLocationSource @Inject constructor(
 
         // Último fix cacheado (si existe): suele llegar casi al instante,
         // mucho antes que el primer resultado de requestLocationUpdates —
-        // evita esperar de más para el primer centrado de cámara.
-        client.lastLocation.addOnSuccessListener { location ->
-            if (location != null) trySend(location.toRawSample())
+        // evita esperar de más para el primer centrado de cámara. Salvo en
+        // highAccuracy=true (navegación paso a paso manejando): ahí un fix
+        // viejo/de baja calidad cacheado de cuando la app usaba prioridad
+        // balanceada puede ser peor que esperar un instante más al primero
+        // realmente bueno — reporte de campo: el punto apareciendo fuera de
+        // la calzada/puente.
+        if (!highAccuracy) {
+            client.lastLocation.addOnSuccessListener { location ->
+                if (location != null) trySend(location.toRawSample())
+            }
         }
 
         val priority = if (highAccuracy) Priority.PRIORITY_HIGH_ACCURACY else Priority.PRIORITY_BALANCED_POWER_ACCURACY
         val request = LocationRequest.Builder(intervalMs)
             .setPriority(priority)
+            .apply {
+                // Solo para navegación paso a paso: no entregar el primer fix
+                // que llegue si es de baja calidad, esperar a uno bueno de
+                // verdad — mismo reporte de campo (punto impreciso, velocidad
+                // en 0 pese a tener chip GPS real). Sin esto, el motor de
+                // ubicación puede devolver una primera estimación gruesa
+                // mientras el GPS todavía está convergiendo.
+                if (highAccuracy) setWaitForAccurateLocation(true)
+            }
             .build()
 
         val callback = object : LocationCallback() {
