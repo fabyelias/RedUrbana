@@ -1,0 +1,309 @@
+<title>Política de Privacidad — RedUrbana</title>
+<style>
+  :root {
+    --bg: #FAFAF8;
+    --surface: #FFFFFF;
+    --text: #1A1F26;
+    --muted: #5B6472;
+    --accent: #16A34A;
+    --border: #E4E7EB;
+    --code-bg: #F1F3F2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0A0E12;
+      --surface: #10151B;
+      --text: #E7EAEE;
+      --muted: #8B95A1;
+      --accent: #22C55E;
+      --border: #232B35;
+      --code-bg: #161D26;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0A0E12;
+    --surface: #10151B;
+    --text: #E7EAEE;
+    --muted: #8B95A1;
+    --accent: #22C55E;
+    --border: #232B35;
+    --code-bg: #161D26;
+  }
+  :root[data-theme="light"] {
+    --bg: #FAFAF8;
+    --surface: #FFFFFF;
+    --text: #1A1F26;
+    --muted: #5B6472;
+    --accent: #16A34A;
+    --border: #E4E7EB;
+    --code-bg: #F1F3F2;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+  }
+  a { color: var(--accent); }
+
+  .wrap {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 4rem 1.5rem 6rem;
+  }
+
+  header.doc-header {
+    margin-bottom: 3rem;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 1rem;
+  }
+  .badge svg { flex: none; }
+  h1 {
+    font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+    font-size: clamp(1.8rem, 4vw, 2.5rem);
+    font-weight: 600;
+    margin: 0 0 0.5rem;
+    text-wrap: balance;
+  }
+  .meta {
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+
+  .toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem 1.5rem;
+    margin: 2rem 0 3rem;
+  }
+  .toc-title {
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.75rem;
+  }
+  .toc ol {
+    margin: 0;
+    padding-left: 1.1rem;
+    columns: 1;
+  }
+  .toc li { margin-bottom: 0.4rem; }
+  .toc a { text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  section {
+    margin-bottom: 2.6rem;
+    scroll-margin-top: 1.5rem;
+  }
+  h2 {
+    font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+    font-size: 1.35rem;
+    font-weight: 600;
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    margin: 0 0 0.9rem;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px solid var(--border);
+  }
+  h2 .num {
+    color: var(--accent);
+    font-family: -apple-system, "Segoe UI", sans-serif;
+    font-weight: 700;
+    font-size: 0.95rem;
+  }
+  h3 {
+    font-size: 1.02rem;
+    font-weight: 700;
+    margin: 1.4rem 0 0.5rem;
+  }
+  p { margin: 0 0 0.9rem; }
+  ul, ol.plain { margin: 0 0 0.9rem; padding-left: 1.3rem; }
+  li { margin-bottom: 0.4rem; }
+
+  .callout {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    margin: 1rem 0;
+    font-size: 0.95rem;
+  }
+  .callout strong { color: var(--accent); }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.92rem;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.6rem 0.7rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th {
+    color: var(--muted);
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
+  .table-wrap table { margin: 0; }
+  .table-wrap th:first-child, .table-wrap td:first-child { padding-left: 1rem; }
+
+  code {
+    background: var(--code-bg);
+    border-radius: 4px;
+    padding: 0.1rem 0.35rem;
+    font-size: 0.88em;
+  }
+
+  footer {
+    margin-top: 4rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.88rem;
+  }
+  footer a { color: var(--text); }
+</style>
+
+<div class="wrap">
+  <header class="doc-header">
+    <div class="badge">
+      <svg width="14" height="14" viewBox="0 0 108 108" aria-hidden="true">
+        <path fill="#22C55E" d="M26,68L26,48A8,8 0 0,1 34,40L74,40A8,8 0 0,1 82,48L82,68Z"/>
+      </svg>
+      RedUrbana · un producto de NexoBA
+    </div>
+    <h1>Política de Privacidad</h1>
+    <div class="meta">Última actualización: 6 de agosto de 2026</div>
+  </header>
+
+  <p>Esta política explica qué información recolecta <strong>RedUrbana</strong> (la "App"), desarrollada por <strong>NexoBA</strong>, cómo se usa y qué control tenés sobre ella. La escribimos para que refleje exactamente lo que la App hace — sin plantillas genéricas — porque la App no tiene cuentas de usuario ni pide datos personales como nombre, email o teléfono para funcionar.</p>
+
+  <nav class="toc">
+    <div class="toc-title">Contenido</div>
+    <ol>
+      <li><a href="#resumen">Resumen rápido</a></li>
+      <li><a href="#datos-recolectados">Qué datos recolecta la App</a></li>
+      <li><a href="#ubicacion-mapa">Ubicación para mostrar el mapa</a></li>
+      <li><a href="#modo-auto">Ubicación en vivo en modo Auto</a></li>
+      <li><a href="#crowdsourcing">Reportes anónimos de viaje (opt-in)</a></li>
+      <li><a href="#terceros">Proveedores externos que procesan datos</a></li>
+      <li><a href="#retencion">Cuánto tiempo se guardan los datos</a></li>
+      <li><a href="#control">Tu control sobre los datos</a></li>
+      <li><a href="#menores">Menores de edad</a></li>
+      <li><a href="#seguridad">Seguridad</a></li>
+      <li><a href="#cambios">Cambios a esta política</a></li>
+      <li><a href="#contacto">Contacto</a></li>
+    </ol>
+  </nav>
+
+  <section id="resumen">
+    <h2><span class="num">1</span> Resumen rápido</h2>
+    <div class="callout">
+      <strong>En una frase:</strong> RedUrbana usa tu ubicación para mostrarte el mapa y las líneas de colectivo cercanas; solo la comparte con otros usuarios si vos activás explícitamente el modo Auto o el reporte de viaje, y en ese caso lo hace de forma anónima, sin vincularla a tu identidad.
+    </div>
+  </section>
+
+  <section id="datos-recolectados">
+    <h2><span class="num">2</span> Qué datos recolecta la App</h2>
+    <p>RedUrbana no tiene sistema de registro ni inicio de sesión. No te pedimos nombre, email, teléfono ni ningún dato que te identifique como persona. Los únicos datos que la App maneja son:</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Dato</th><th>¿Cuándo se usa?</th><th>¿Se comparte?</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Ubicación del dispositivo (GPS)</td><td>Siempre que tenés la App abierta con el mapa visible</td><td>No, salvo modo Auto o reporte de viaje (ver abajo)</td></tr>
+          <tr><td>Posición en vivo + rumbo (modo Auto)</td><td>Solo si activás "compartir viaje" en modo Auto</td><td>Sí, de forma anónima, con otros usuarios de la App</td></tr>
+          <tr><td>Muestras de ubicación de viaje (crowdsourcing)</td><td>Solo si activás el opt-in de reportes y elegís una línea</td><td>Sí, de forma anónima y agregada, para estimar posiciones de colectivos</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="ubicacion-mapa">
+    <h2><span class="num">3</span> Ubicación para mostrar el mapa</h2>
+    <p>Cuando abrís la App, usamos tu ubicación aproximada o precisa (según el permiso que le des a Android) para centrar el mapa cerca tuyo y calcular distancias a paradas y rutas. Este uso es local: la posición se procesa en el dispositivo para dibujar el mapa y no se envía a nuestros servidores salvo en los dos casos explícitos de las secciones 4 y 5.</p>
+  </section>
+
+  <section id="modo-auto">
+    <h2><span class="num">4</span> Ubicación en vivo en modo Auto</h2>
+    <p>Si elegís conducir en "modo Auto" y activás compartir tu viaje, la App publica tu posición y rumbo cada pocos segundos para que otros usuarios te vean en el mapa en tiempo real — es una función explícita, no algo que ocurre en segundo plano sin que la actives.</p>
+    <p>Esa posición se identifica con un <strong>código de sesión aleatorio</strong>, generado de nuevo en cada viaje. No está atado a ninguna cuenta, nombre ni identificador de tu dispositivo — nadie puede usar ese código para saber quién sos. Al tocar "salir" o terminar el viaje, tu posición se borra del servidor.</p>
+  </section>
+
+  <section id="crowdsourcing">
+    <h2><span class="num">5</span> Reportes anónimos de viaje (opt-in)</h2>
+    <p>La App puede detectar patrones de movimiento compatibles con "estás viajando en colectivo" (velocidad, paradas frecuentes) y, <strong>solo si activaste esta opción manualmente</strong> en Configuración y elegiste una línea, envía muestras de posición para ayudar a estimar en tiempo real dónde están los colectivos de esa línea para todos los usuarios.</p>
+    <p>Igual que en el modo Auto, cada viaje usa un identificador de sesión aleatorio que se descarta al terminar el viaje — un viaje reportado hoy no se puede vincular con uno reportado mañana, ni con vos como persona.</p>
+  </section>
+
+  <section id="terceros">
+    <h2><span class="num">6</span> Proveedores externos que procesan datos</h2>
+    <p>Para funcionar, la App envía datos a estos proveedores de infraestructura, estrictamente lo necesario para el servicio que prestan:</p>
+    <ul>
+      <li><strong>Mapbox</strong> — mapas, cálculo de rutas y direcciones. Recibe coordenadas de origen/destino cuando pedís una ruta o navegación, no datos personales.</li>
+      <li><strong>Supabase</strong> — almacenamiento en vivo de las posiciones anónimas del modo Auto y de los reportes de viaje descriptos arriba.</li>
+    </ul>
+    <p>Ninguno de estos proveedores recibe tu nombre, email ni ningún dato que te identifique — porque la App nunca los recolecta en primer lugar.</p>
+  </section>
+
+  <section id="retencion">
+    <h2><span class="num">7</span> Cuánto tiempo se guardan los datos</h2>
+    <p>Las posiciones en vivo del modo Auto se borran apenas terminás o salís del viaje; si eso falla (por ejemplo, sin conexión al salir), un proceso automático las elimina igual poco después por antigüedad. Las muestras de reportes de viaje no quedan asociadas entre sí una vez que el viaje termina.</p>
+  </section>
+
+  <section id="control">
+    <h2><span class="num">8</span> Tu control sobre los datos</h2>
+    <ul>
+      <li>El permiso de ubicación se lo das a nivel de Android — podés revocarlo en cualquier momento desde los ajustes del sistema.</li>
+      <li>Compartir tu viaje en modo Auto es una acción explícita por viaje — si no la activás, nadie ve tu posición.</li>
+      <li>El reporte anónimo de viaje se activa y desactiva desde Configuración dentro de la App, cuando quieras.</li>
+      <li>Como no hay cuenta ni identificador persistente, no existe un "perfil" guardado que pedir borrar — al terminar un viaje, ese rastro ya no existe.</li>
+    </ul>
+  </section>
+
+  <section id="menores">
+    <h2><span class="num">9</span> Menores de edad</h2>
+    <p>RedUrbana es una app de información de transporte público de uso general y no está dirigida específicamente a niños. No recolectamos intencionalmente datos que identifiquen a menores de edad.</p>
+  </section>
+
+  <section id="seguridad">
+    <h2><span class="num">10</span> Seguridad</h2>
+    <p>Toda la comunicación entre la App y nuestros proveedores (Mapbox, Supabase) viaja cifrada (HTTPS). Al no recolectar datos personales identificables, el riesgo asociado a esa información es, por diseño, mucho más acotado.</p>
+  </section>
+
+  <section id="cambios">
+    <h2><span class="num">11</span> Cambios a esta política</h2>
+    <p>Si cambiamos qué datos recolecta la App o cómo los usamos, vamos a actualizar esta página y la fecha de "Última actualización" al principio. Te recomendamos revisarla de tanto en tanto.</p>
+  </section>
+
+  <section id="contacto">
+    <h2><span class="num">12</span> Contacto</h2>
+    <p>Para preguntas sobre esta política o sobre el manejo de datos en RedUrbana, escribinos a <a href="mailto:nexobaoficial@gmail.com">nexobaoficial@gmail.com</a>.</p>
+  </section>
+
+  <footer>
+    RedUrbana es un producto creado por <strong>NexoBA</strong>. Ver también los <a href="https://claude.ai/code/artifact/f1944804-cd59-4ae8-a9a0-fdb6f83e3f31">Términos y Condiciones de Uso</a>.
+  </footer>
+</div>

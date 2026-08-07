@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.play.publisher)
 }
 
 // Keystore de release: nunca en el repo. Ver docs/CREDENTIALS_SETUP.md
@@ -18,6 +19,15 @@ val keystoreProperties = Properties().apply {
     }
 }
 
+// Cuenta de servicio de Google Play: nunca en el repo, mismo criterio que el
+// keystore. Solo existe en CI (ver .github/workflows/publish-play-internal.yml,
+// que la reconstruye a partir de un secret de GitHub) o si un dev la baja a
+// mano para probar una publicación real desde su máquina. Si no existe, el
+// bloque `play {}` de abajo no configura las credenciales y la tarea de
+// publicación simplemente falla si se la intenta correr (no rompe ningún
+// build normal de compilación/instalación).
+val playServiceAccountFile = file("play-service-account.json")
+
 android {
     namespace = "com.redurbana.app"
     compileSdk = 35
@@ -26,8 +36,12 @@ android {
         applicationId = "com.redurbana.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0-skeleton"
+        // En CI (ver .github/workflows/publish-play-internal.yml), cada
+        // corrida trae GITHUB_RUN_NUMBER, que Play Console exige que sea
+        // siempre mayor al de la subida anterior. Local (sin esa variable)
+        // sigue siendo 1, como siempre.
+        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+        versionName = "0.1.0"
     }
 
     signingConfigs {
@@ -93,4 +107,17 @@ dependencies {
     // compartir un mismo LinesViewModel entre Lines y TripDetail (grafo
     // anidado TripPlanningGraph).
     implementation(libs.hilt.navigation.compose)
+}
+
+// Publicación automática a Play Console (track "internal"), ver
+// .github/workflows/publish-play-internal.yml. Sin el archivo de
+// credenciales no se puede ni resolver la ruta con `file()` sin que Gradle
+// tire error al evaluar el script, por eso el `if` envuelve todo el bloque
+// en vez de solo el `serviceAccountCredentials.set(...)`.
+if (playServiceAccountFile.exists()) {
+    play {
+        serviceAccountCredentials.set(playServiceAccountFile)
+        track.set("internal")
+        defaultToAppBundles.set(true)
+    }
 }

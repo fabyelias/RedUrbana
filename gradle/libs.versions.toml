@@ -33,6 +33,9 @@ ksp = "2.0.20-1.0.25"
 turbine = "1.1.0"
 junit = "4.13.2"
 material = "1.12.0"
+# 4.x exige AGP 9 ("Compatibility with older AGP ... is not supported"); el
+# proyecto está pineado a AGP 8.6.0 (ver arriba), así que va la última 3.x.
+playPublisher = "3.13.0"
 
 [libraries]
 core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -87,3 +90,4 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+play-publisher = { id = "com.github.triplet.play", version.ref = "playPublisher" }
